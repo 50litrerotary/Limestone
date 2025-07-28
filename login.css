@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Tinos&display=swap');
+
+:root {
+  --bg-color: #F5F2E9;
+  --text-color: #4d5a4d;
+  --input-bg: #ddd8ce;
+  --btn-color: #b3aea5;
+  --font: 'Tinos', 'Times New Roman', serif;
+  --accent-link: #5a5032;
+  --placeholder: rgba(15, 53, 36, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-color);
+  font-family: var(--font);
+  color: var(--text-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+
+.logo-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+}
+
+.logo {
+  width: 304px;
+  height: 211px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Email Input */
+.login-form input[type="email"] {
+  width: 180px;
+  height: 32px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-family: var(--font);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: none;
+}
+
+/* Password + Submit */
+.password-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-left: 35px; /* ✅ this aligns left edge with Email box */
+}
+
+
+.password-row input[type="password"] {
+  width: 180px;
+  height: 32px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-family: var(--font);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: none;
+}
+
+.submit-btn {
+  width: 32px;
+  height: 32px;
+  background-color: var(--btn-color);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.submit-btn img {
+  width: 16px;
+  height: 16px;
+}
+
+/* Placeholder styling */
+.login-form input::placeholder,
+.password-row input::placeholder {
+  color: var(--placeholder);
+}
+
+/* Register link */
+.register-link {
+  margin-top: 0.5rem;
+  width: 180px;
+  text-align: left;
+}
+
+.register-link a {
+  color: var(--accent-link);
+  font-size: 0.95rem;
+  text-decoration: underline;
+  font-family: var(--font);
+}
