@@ -4,9 +4,6 @@ from livereload import Server
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return "Hello from Flask on Mac M4!"
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -18,6 +15,13 @@ def login():
 def bookshelf():
     # You can pass book data later if needed
     return render_template('bookshelf.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        # handle registration logic here
+        pass
+    return render_template('register.html')
 
 if __name__ == '__main__':
     server = Server(app.wsgi_app)
