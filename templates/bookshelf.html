@@ -2,36 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bookshelf</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/bookshelf.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Limestone | Login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body>
-  <div class="container">
-    <div class="sidebar">
-      <img src="{{ url_for('static', filename='img/logo_2.png') }}" alt="Logo" class="logo">
-      <div class="book-count">3 Books In Use</div>
+  <div class="login-container">
+    <div class="logo-wrapper">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Limestone Logo" class="logo" />
     </div>
-    <div class="main-content">
-      <div class="top-buttons">
-        <button><img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout"></button>
-        <button><img src="{{ url_for('static', filename='img/search.png') }}" alt="Search"></button>
-        <button><img src="{{ url_for('static', filename='img/add.png') }}" alt="Add"></button>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="width:180px; text-align:left; margin-bottom:10px;">
+          {% for category, message in messages %}
+            <p style="color:{{ 'red' if category=='error' else 'green' }}; font-size:0.9rem; margin:2px 0;">
+              {{ message }}
+            </p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form class="login-form" method="POST" action="/login">
+      <input
+        type="email" name="email" placeholder="Email"
+        value="{{ email|default('') }}" required
+        pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+        title="Please enter a valid email (e.g., user@example.com)"
+      />
+
+      <div class="password-row">
+        <input type="password" name="password" placeholder="Password" required />
+        <button type="submit" class="submit-btn">
+          <img src="{{ url_for('static', filename='img/arrow.png') }}" alt="Submit" />
+        </button>
       </div>
 
-      <div class="book-grid">
-        <div class="book-item">
-          <div class="book-cover">
-            <span>Placeholder</span>
-            <div class="progress-tag">12/200</div>
-          </div>
-          <div class="book-info">
-            <div class="title">Sample Title</div>
-            <div class="author">John Smith</div>
-          </div>
-        </div>
+      <div class="register-link">
+        <a href="/register">Register</a>
       </div>
-    </div>
+    </form>
   </div>
 </body>
 </html>

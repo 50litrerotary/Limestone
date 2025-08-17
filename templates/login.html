@@ -12,8 +12,25 @@
       <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Limestone Logo" class="logo" />
     </div>
 
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div style="width:180px; text-align:left; margin-bottom:10px;">
+          {% for category, message in messages %}
+            <p style="color:{{ 'red' if category=='error' else 'green' }}; font-size:0.9rem; margin:2px 0;">
+              {{ message }}
+            </p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <form class="login-form" method="POST" action="/login">
-      <input type="email" name="email" placeholder="Email" required />
+      <input
+        type="email" name="email" placeholder="Email"
+        value="{{ email|default('') }}" required
+        pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+        title="Please enter a valid email (e.g., user@example.com)"
+      />
 
       <div class="password-row">
         <input type="password" name="password" placeholder="Password" required />
