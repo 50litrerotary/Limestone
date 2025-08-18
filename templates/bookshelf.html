@@ -14,7 +14,7 @@
 
       <div class="book-count">{{ book_count or 0 }} Books In Use</div>
 
-      <!-- Filters: title + arrow that opens a dropdown -->
+      <!-- Filters -->
       <div class="filters">
 
         <!-- Author -->
@@ -26,9 +26,7 @@
           <ul id="author-menu" class="menu" role="listbox" tabindex="-1" data-name="author">
             {% if authors %}
               {% for a in authors %}
-                <li role="option">
-                  <button type="button" data-value="{{ a }}">{{ a }}</button>
-                </li>
+                <li role="option"><button type="button" data-value="{{ a }}">{{ a }}</button></li>
               {% endfor %}
             {% else %}
               <li class="menu-empty">No authors yet</li>
@@ -46,9 +44,7 @@
           <ul id="genre-menu" class="menu" role="listbox" tabindex="-1" data-name="genre">
             {% if genres %}
               {% for g in genres %}
-                <li role="option">
-                  <button type="button" data-value="{{ g }}">{{ g }}</button>
-                </li>
+                <li role="option"><button type="button" data-value="{{ g }}">{{ g }}</button></li>
               {% endfor %}
             {% else %}
               <li class="menu-empty">No genres yet</li>
@@ -66,9 +62,7 @@
           <ul id="tag-menu" class="menu" role="listbox" tabindex="-1" data-name="tag">
             {% if tags %}
               {% for t in tags %}
-                <li role="option">
-                  <button type="button" data-value="{{ t }}">{{ t }}</button>
-                </li>
+                <li role="option"><button type="button" data-value="{{ t }}">{{ t }}</button></li>
               {% endfor %}
             {% else %}
               <li class="menu-empty">No tags yet</li>
@@ -108,9 +102,7 @@
         document.querySelectorAll('.chev').forEach(a => {
           if (a.getAttribute('aria-controls') !== exceptId) a.setAttribute('aria-expanded', 'false');
         });
-        menus.forEach(m => {
-          if (m.id !== exceptId) m.classList.remove('open');
-        });
+        menus.forEach(m => { if (m.id !== exceptId) m.classList.remove('open'); });
       }
 
       triggers.forEach(el => {
@@ -118,10 +110,8 @@
           const id = el.getAttribute('aria-controls') || el.dataset.controls;
           const menu = document.getElementById(id);
           if (!menu) return;
-
           const arrow = document.querySelector(`.chev[aria-controls="${id}"]`);
           const willOpen = !(arrow && arrow.getAttribute('aria-expanded') === 'true');
-
           closeAll(id);
           if (arrow) arrow.setAttribute('aria-expanded', String(willOpen));
           menu.classList.toggle('open', willOpen);
@@ -142,7 +132,6 @@
           if (arrow) arrow.setAttribute('aria-expanded', 'false');
           menu.classList.remove('open');
 
-          // Submit via GET to /bookshelf with the chosen filter (optional)
           const params = new URLSearchParams(window.location.search);
           params.set(name, val);
           window.location.search = params.toString();
@@ -152,7 +141,6 @@
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.filter-block')) closeAll('');
       });
-
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeAll('');
       });

@@ -135,6 +135,7 @@ def login():
         typed_email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
 
+        # Reject bad email early
         if not EMAIL_REGEX.match(typed_email):
             flash("Please enter a valid email address (e.g., name@example.com).", "error")
             return render_template('login.html', email=typed_email)
@@ -147,9 +148,11 @@ def login():
         if ok:
             return redirect(url_for('bookshelf'), code=302)
 
+        # Invalid creds -> show error on the same page
         flash("Invalid email or password", "error")
         return render_template('login.html', email=typed_email)
 
+    # GET
     return render_template('login.html')
 
 @app.route('/bookshelf')
@@ -159,6 +162,7 @@ def bookshelf():
     authors = [row[0] for row in db.query(Book.author).distinct().all() if row[0]]
     genres  = [row[0] for row in db.query(Book.genre).distinct().all() if row[0]]
     tags    = [row[0] for row in db.query(Tag.name).distinct().all()]
+
     book_count = db.query(Book).count()
 
     selected_author = request.args.get('author', '')
