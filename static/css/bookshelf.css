@@ -197,3 +197,25 @@ body {
   width: 60px;
   color: #716868;
 }
+/* === Fix: make main background reach bottom with sidebar === */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+/* Let the container grow with content; keep full-viewport minimum */
+.container {
+  min-height: 100vh;
+  height: auto;
+  align-items: stretch; /* ensure both columns match tallest */
+}
+
+/* Sidebar shouldn’t force a fixed height */
+.sidebar {
+  height: auto;          /* override the old height: 100% */
+  box-sizing: border-box;
+}
+
+/* Let the page handle scrolling so the background color reaches the bottom */
+.main-content {
+  overflow-y: visible;    /* was auto; page scrolls instead */
+}
