@@ -3,46 +3,88 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Limestone | Login</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  <title>Limestone | Bookshelf</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/bookshelf.css') }}">
 </head>
 <body>
-  <div class="login-container">
-    <div class="logo-wrapper">
-      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Limestone Logo" class="logo" />
-    </div>
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <img class="logo" src="{{ url_for('static', filename='img/logo_2.png') }}" alt="Limestone" />
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div style="width:180px; text-align:left; margin-bottom:10px;">
-          {% for category, message in messages %}
-            <p style="color:{{ 'red' if category=='error' else 'green' }}; font-size:0.9rem; margin:2px 0;">
-              {{ message }}
-            </p>
-          {% endfor %}
+      <div class="book-count">{{ book_count or 0 }} Books In Use</div>
+
+      <!-- Filters (native selects with custom arrow) -->
+      <div class="filters">
+        <!-- Author -->
+        <div class="filter-block">
+          <span class="filter-title">Author</span>
+          <div class="select-wrapper">
+            <select id="authorSelect" name="author">
+              <option value="" {% if not selected_author %}selected{% endif %} disabled>Select</option>
+              {% for a in (authors or []) %}
+                <option value="{{ a }}" {% if selected_author == a %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+              {% if not authors %}
+                <option value="" disabled>No authors yet</option>
+              {% endif %}
+            </select>
+          </div>
         </div>
-      {% endif %}
-    {% endwith %}
 
-    <form class="login-form" method="POST" action="/login">
-      <input
-        type="email" name="email" placeholder="Email"
-        value="{{ email|default('') }}" required
-        pattern="[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
-        title="Please enter a valid email (e.g., user@example.com)"
-      />
+        <!-- Genre -->
+        <div class="filter-block">
+          <span class="filter-title">Genre</span>
+          <div class="select-wrapper">
+            <select id="genreSelect" name="genre">
+              <option value="" {% if not selected_genre %}selected{% endif %} disabled>Select</option>
+              {% for g in (genres or []) %}
+                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
+              {% endfor %}
+              {% if not genres %}
+                <option value="" disabled>No genres yet</option>
+              {% endif %}
+            </select>
+          </div>
+        </div>
 
-      <div class="password-row">
-        <input type="password" name="password" placeholder="Password" required />
-        <button type="submit" class="submit-btn">
-          <img src="{{ url_for('static', filename='img/arrow.png') }}" alt="Submit" />
+        <!-- Tags (now a real select too) -->
+        <div class="filter-block">
+          <span class="filter-title">Tags</span>
+          <div class="select-wrapper">
+            <select id="tagsSelect" name="tag">
+              {% if tags %}
+                <option value="" selected disabled>Select</option>
+                {% for t in tags %}
+                  <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              {% else %}
+                <option value="" selected disabled>No tags yet</option>
+              {% endif %}
+            </select>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content">
+      <div class="top-buttons">
+        <button title="Logout">
+          <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
+        </button>
+        <button title="Search">
+          <img src="{{ url_for('static', filename='img/search.png') }}" alt="Search">
+        </button>
+        <button title="Add">
+          <img src="{{ url_for('static', filename='img/add.png') }}" alt="Add">
         </button>
       </div>
 
-      <div class="register-link">
-        <a href="/register">Register</a>
+      <div class="book-grid">
+        <!-- empty grid until books are added -->
       </div>
-    </form>
+    </main>
   </div>
 </body>
 </html>

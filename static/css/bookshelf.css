@@ -10,6 +10,7 @@ body {
   height: 100vh;
 }
 
+/* ===== Sidebar ===== */
 .sidebar {
   width: 323px;
   height: 100%;
@@ -20,23 +21,90 @@ body {
   align-items: flex-start;
 }
 
+/* Figma logo size (stable) */
 .logo {
   width: 178px;
   height: 66px;
   margin-bottom: 40px;
 }
 
+/* “Books In Use” — match label size (18/21, bold + underline) */
 .book-count {
   width: 128px;
   height: 26px;
   color: #463F3F;
-  font-weight: bold;
+  font-family: 'Tinos', serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 21px;
   text-decoration: underline;
   text-align: left;
   margin-left: 4px;
   margin-bottom: 40px;
 }
 
+/* Labels (Author / Genre / Tags) */
+.filter-title {
+  font-family: 'Tinos', serif;
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 21px;
+  color: #716868;
+}
+
+/* Filters layout */
+.filters { display: flex; flex-direction: column; gap: 18px; width: 100%; }
+.filter-block { display: flex; flex-direction: column; gap: 8px; margin-left: 4px; }
+
+/* ===== Transparent native select + custom arrow ===== */
+.select-wrapper {
+  position: relative;
+  width: 200px;
+  display: inline-block;
+}
+
+/* Native select look */
+.select-wrapper select {
+  width: 100%;
+  height: 34px;
+  background: transparent;                  /* transparent body */
+  border: 1px solid #716868;                /* set to 'none' to remove frame entirely */
+  border-radius: 4px;
+  color: #463F3F;
+  font-family: 'Tinos', serif;
+  font-size: 16px;
+  padding: 4px 32px 4px 10px;               /* room for custom arrow */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Hide default arrow in old Edge/IE */
+.select-wrapper select::-ms-expand { display: none; }
+
+/* Custom arrow overlay — click-through so select still opens */
+.select-wrapper::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%) rotate(180deg);   /* default DOWN (your asset is up) */
+  background: url("../img/drop_arrow_up.png") no-repeat center;
+  background-size: contain;
+  pointer-events: none;                          /* don't block clicks */
+  transition: transform 0.18s ease;
+}
+
+/* Flip arrow when the select is focused/open (CSS-only) */
+.select-wrapper:focus-within::after {
+  transform: translateY(-50%) rotate(0deg);      /* UP */
+}
+
+/* ===== Main content ===== */
 .main-content {
   flex: 1;
   background-color: #d9d4cb;
@@ -45,6 +113,7 @@ body {
   overflow-y: auto;
 }
 
+/* Top-right buttons (stable) */
 .top-buttons {
   position: absolute;
   top: 20px;
@@ -67,6 +136,7 @@ body {
   height: 100%;
 }
 
+/* Books grid (unchanged) */
 .book-grid {
   display: flex;
   gap: 40px;
