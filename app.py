@@ -159,7 +159,6 @@ def bookshelf():
     authors = [row[0] for row in db.query(Book.author).distinct().all() if row[0]]
     genres  = [row[0] for row in db.query(Book.genre).distinct().all() if row[0]]
     tags    = [row[0] for row in db.query(Tag.name).distinct().all()]
-
     book_count = db.query(Book).count()
 
     selected_author = request.args.get('author', '')
