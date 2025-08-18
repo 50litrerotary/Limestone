@@ -56,7 +56,7 @@ def login():
         db.close()
 
         if ok:
-            # Do not flash here; just redirect to bookshelf
+            # Successful login -> go to bookshelf
             return redirect(url_for('bookshelf'), code=302)
 
         # Invalid creds -> show error on the same page
@@ -87,18 +87,6 @@ def bookshelf():
         book_count=book_count
     )
 
-
-    return render_template(
-        'bookshelf.html',
-        authors=authors,
-        genres=genres,
-        tags=tags,
-        selected_author=selected_author,
-        selected_genre=selected_genre,
-        book_count=book_count
-    )
-
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     email = ""
@@ -111,12 +99,12 @@ def register():
 
         has_errors = False
 
-        # Email format (reject hv@jhb, jfdl@jnfds)
+        # Email format
         if not EMAIL_REGEX.match(email):
             email_error = "Please enter a valid email address (e.g., name@example.com)."
             has_errors = True
 
-        # Password length (show inline error)
+        # Password length
         if len(password) < 8:
             password_error = "Password must be at least 8 characters long."
             has_errors = True
@@ -149,6 +137,14 @@ def register():
     # GET
     return render_template('register.html', email=email)
 
+# --- NEW: Logout route (wire your Logout button to this) ---
+@app.route('/logout')
+def logout():
+    # For now, just redirect back to login with a message
+    flash("Logged out successfully.", "success")
+    return redirect(url_for('login'))
+
+# --- DEV SERVER ---
 if __name__ == '__main__':
     server = Server(app.wsgi_app)
     server.serve(port=5001, debug=True)

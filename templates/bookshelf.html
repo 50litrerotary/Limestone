@@ -48,7 +48,7 @@
           </div>
         </div>
 
-        <!-- Tags (now a real select too) -->
+        <!-- Tags -->
         <div class="filter-block">
           <span class="filter-title">Tags</span>
           <div class="select-wrapper">
@@ -70,9 +70,14 @@
     <!-- Main content -->
     <main class="main-content">
       <div class="top-buttons">
-        <button title="Logout">
-          <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
-        </button>
+        <!-- Logout now links back to /login -->
+        <form action="{{ url_for('login') }}" method="get" style="display:inline;">
+          <button type="submit" title="Logout">
+            <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
+          </button>
+        </form>
+
+        <!-- Search + Add (placeholders for later JS/route) -->
         <button title="Search">
           <img src="{{ url_for('static', filename='img/search.png') }}" alt="Search">
         </button>
