@@ -41,32 +41,63 @@ def root():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    typed_email = ""
     if request.method == 'POST':
         typed_email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
 
-        # Email format check here too (block things like hv@jhb, jfdl@jnfds)
+        # Reject bad email early
         if not EMAIL_REGEX.match(typed_email):
             flash("Please enter a valid email address (e.g., name@example.com).", "error")
             return render_template('login.html', email=typed_email)
 
         db = SessionLocal()
         user = db.query(User).filter_by(email=typed_email).first()
-        if user and check_password_hash(user.password_hash, password):
-            db.close()
-            flash("Login successful!", "success")
-            return redirect(url_for('bookshelf'))
+        ok = bool(user and check_password_hash(user.password_hash, password))
         db.close()
 
+        if ok:
+            # Do not flash here; just redirect to bookshelf
+            return redirect(url_for('bookshelf'), code=302)
+
+        # Invalid creds -> show error on the same page
         flash("Invalid email or password", "error")
         return render_template('login.html', email=typed_email)
 
+    # GET
     return render_template('login.html')
 
 @app.route('/bookshelf')
 def bookshelf():
-    return render_template('bookshelf.html')
+    selected_author = request.args.get('author', '')
+    selected_genre = request.args.get('genre', '')
+
+    # placeholders until DB wiring
+    authors = []    # e.g. ["Ethan Mollick", "Kevin Horsley"]
+    genres = []     # e.g. ["Psychology", "Business"]
+    tags = []       # e.g. ["Science", "School"]
+    book_count = 0
+
+    return render_template(
+        'bookshelf.html',
+        authors=authors,
+        genres=genres,
+        tags=tags,
+        selected_author=selected_author,
+        selected_genre=selected_genre,
+        book_count=book_count
+    )
+
+
+    return render_template(
+        'bookshelf.html',
+        authors=authors,
+        genres=genres,
+        tags=tags,
+        selected_author=selected_author,
+        selected_genre=selected_genre,
+        book_count=book_count
+    )
+
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
