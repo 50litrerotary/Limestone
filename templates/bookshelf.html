@@ -80,10 +80,10 @@
         <a href="{{ url_for('login') }}" title="Logout" class="icon-btn">
           <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
         </a>
-        <button title="Search">
+        <button title="Search" class="icon-btn">
           <img src="{{ url_for('static', filename='img/search.png') }}" alt="Search">
         </button>
-        <button title="Add">
+        <button id="openAddModal" title="Add" class="icon-btn accent">
           <img src="{{ url_for('static', filename='img/add.png') }}" alt="Add">
         </button>
       </div>
@@ -92,9 +92,59 @@
     </main>
   </div>
 
-  <!-- JS: open/close menus and set hidden values -->
+  <!-- Add Book Modal -->
+  <div id="addModal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
+      <div class="modal-header">
+        <h2 id="addModalTitle">Add a Book</h2>
+        <button id="closeAddModal" class="close-btn" aria-label="Close">×</button>
+      </div>
+
+      <form id="addBookForm" class="modal-body">
+        <div class="field">
+          <label>Title</label>
+          <input type="text" name="title" placeholder="Book title" required>
+        </div>
+
+        <div class="two-col">
+          <div class="field">
+            <label>Author</label>
+            <input type="text" name="author" placeholder="Author">
+          </div>
+          <div class="field">
+            <label>Genre</label>
+            <input type="text" name="genre" placeholder="Genre">
+          </div>
+        </div>
+
+        <div class="two-col">
+          <div class="field">
+            <label>Cover image</label>
+            <input type="file" name="cover" accept="image/*">
+          </div>
+          <div class="field">
+            <label>Book file (PDF/EPUB)</label>
+            <input type="file" name="file" accept=".pdf,.epub,.mobi">
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Tags (comma separated)</label>
+          <input type="text" name="tags" placeholder="school, science">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn ghost" id="cancelAdd">Cancel</button>
+          <button type="submit" class="btn primary">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JS: dropdowns + modal open/close (no backend calls yet) -->
   <script>
     (function () {
+      // dropdowns
       const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
       const menus  = Array.from(document.querySelectorAll('.menu'));
 
@@ -141,8 +191,28 @@
       document.addEventListener('click', (e) => {
         if (!e.target.closest('.filter-block')) closeAll('');
       });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') closeAll('');
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(''); });
+
+      // modal
+      const modal = document.getElementById('addModal');
+      const openBtn = document.getElementById('openAddModal');
+      const closeBtn = document.getElementById('closeAddModal');
+      const cancelBtn = document.getElementById('cancelAdd');
+
+      function openModal() { modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false'); }
+      function closeModal() { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); }
+
+      openBtn.addEventListener('click', openModal);
+      closeBtn.addEventListener('click', closeModal);
+      cancelBtn.addEventListener('click', closeModal);
+      modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+      // placeholder submission (frontend only)
+      document.getElementById('addBookForm').addEventListener('submit', (e) => {
+        e.preventDefault();
+        // you’ll wire this to POST /books later
+        closeModal();
+        alert('Book captured (frontend). Hook this up to your Flask /books route.');
       });
     })();
   </script>

@@ -117,3 +117,55 @@ body {
   text-decoration: underline;
   font-family: var(--font);
 }
+
+/* Modal (native <dialog>) */
+#addModal {
+  border: none;
+  padding: 20px;
+  width: 320px;
+  border-radius: 8px;
+  font-family: 'Tinos', serif;
+  background: #f5f2e9;
+}
+#addModal::backdrop { background: rgba(0,0,0,0.2); }
+
+#addModal h3 {
+  margin: 0 0 12px;
+  color: #463F3F;
+}
+
+#addModal form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#addModal label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #716868;
+  font-weight: 700;
+}
+
+#addModal input[type="text"],
+#addModal input[type="file"] {
+  font-family: 'Tinos', serif;
+  border: 1px solid #716868;
+  background: #fff;
+  height: 32px;
+  padding: 4px 8px;
+}
+
+#addModal .modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+#addModal .modal-actions .primary {
+  background: #b3aea5;
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+}
