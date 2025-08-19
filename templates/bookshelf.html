@@ -14,70 +14,78 @@
 
       <div class="book-count">{{ book_count or 0 }} Books In Use</div>
 
-      <!-- Filters (native selects with custom arrow) -->
+      <!-- Filters: title + arrow that opens a dropdown -->
       <div class="filters">
+
         <!-- Author -->
         <div class="filter-block">
-          <span class="filter-title">Author</span>
-          <div class="select-wrapper">
-            <select id="authorSelect" name="author">
-              <option value="" {% if not selected_author %}selected{% endif %} disabled>Select</option>
-              {% for a in (authors or []) %}
-                <option value="{{ a }}" {% if selected_author == a %}selected{% endif %}>{{ a }}</option>
-              {% endfor %}
-              {% if not authors %}
-                <option value="" disabled>No authors yet</option>
-              {% endif %}
-            </select>
+          <div class="filter-row">
+            <span class="filter-title" data-controls="author-menu">Author</span>
+            <button class="chev" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="author-menu"></button>
           </div>
+          <ul id="author-menu" class="menu" role="listbox" tabindex="-1" data-name="author">
+            {% if authors %}
+              {% for a in authors %}
+                <li role="option">
+                  <button type="button" data-value="{{ a }}">{{ a }}</button>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="menu-empty">No authors yet</li>
+            {% endif %}
+          </ul>
+          <input type="hidden" id="authorValue" name="author" value="{{ selected_author or '' }}">
         </div>
 
         <!-- Genre -->
         <div class="filter-block">
-          <span class="filter-title">Genre</span>
-          <div class="select-wrapper">
-            <select id="genreSelect" name="genre">
-              <option value="" {% if not selected_genre %}selected{% endif %} disabled>Select</option>
-              {% for g in (genres or []) %}
-                <option value="{{ g }}" {% if selected_genre == g %}selected{% endif %}>{{ g }}</option>
-              {% endfor %}
-              {% if not genres %}
-                <option value="" disabled>No genres yet</option>
-              {% endif %}
-            </select>
+          <div class="filter-row">
+            <span class="filter-title" data-controls="genre-menu">Genre</span>
+            <button class="chev" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="genre-menu"></button>
           </div>
+          <ul id="genre-menu" class="menu" role="listbox" tabindex="-1" data-name="genre">
+            {% if genres %}
+              {% for g in genres %}
+                <li role="option">
+                  <button type="button" data-value="{{ g }}">{{ g }}</button>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="menu-empty">No genres yet</li>
+            {% endif %}
+          </ul>
+          <input type="hidden" id="genreValue" name="genre" value="{{ selected_genre or '' }}">
         </div>
 
         <!-- Tags -->
         <div class="filter-block">
-          <span class="filter-title">Tags</span>
-          <div class="select-wrapper">
-            <select id="tagsSelect" name="tag">
-              {% if tags %}
-                <option value="" selected disabled>Select</option>
-                {% for t in tags %}
-                  <option value="{{ t }}">{{ t }}</option>
-                {% endfor %}
-              {% else %}
-                <option value="" selected disabled>No tags yet</option>
-              {% endif %}
-            </select>
+          <div class="filter-row">
+            <span class="filter-title" data-controls="tag-menu">Tags</span>
+            <button class="chev" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="tag-menu"></button>
           </div>
+          <ul id="tag-menu" class="menu" role="listbox" tabindex="-1" data-name="tag">
+            {% if tags %}
+              {% for t in tags %}
+                <li role="option">
+                  <button type="button" data-value="{{ t }}">{{ t }}</button>
+                </li>
+              {% endfor %}
+            {% else %}
+              <li class="menu-empty">No tags yet</li>
+            {% endif %}
+          </ul>
+          <input type="hidden" id="tagValue" name="tag" value="">
         </div>
+
       </div>
     </aside>
 
     <!-- Main content -->
     <main class="main-content">
       <div class="top-buttons">
-        <!-- Logout now links back to /login -->
-        <form action="{{ url_for('login') }}" method="get" style="display:inline;">
-          <button type="submit" title="Logout">
-            <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
-          </button>
-        </form>
-
-        <!-- Search + Add (placeholders for later JS/route) -->
+        <a href="{{ url_for('login') }}" title="Logout" class="icon-btn">
+          <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
+        </a>
         <button title="Search">
           <img src="{{ url_for('static', filename='img/search.png') }}" alt="Search">
         </button>
@@ -86,10 +94,69 @@
         </button>
       </div>
 
-      <div class="book-grid">
-        <!-- empty grid until books are added -->
-      </div>
+      <div class="book-grid"></div>
     </main>
   </div>
+
+  <!-- JS: open/close menus and set hidden values -->
+  <script>
+    (function () {
+      const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
+      const menus  = Array.from(document.querySelectorAll('.menu'));
+
+      function closeAll(exceptId) {
+        document.querySelectorAll('.chev').forEach(a => {
+          if (a.getAttribute('aria-controls') !== exceptId) a.setAttribute('aria-expanded', 'false');
+        });
+        menus.forEach(m => {
+          if (m.id !== exceptId) m.classList.remove('open');
+        });
+      }
+
+      triggers.forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('aria-controls') || el.dataset.controls;
+          const menu = document.getElementById(id);
+          if (!menu) return;
+
+          const arrow = document.querySelector(`.chev[aria-controls="${id}"]`);
+          const willOpen = !(arrow && arrow.getAttribute('aria-expanded') === 'true');
+
+          closeAll(id);
+          if (arrow) arrow.setAttribute('aria-expanded', String(willOpen));
+          menu.classList.toggle('open', willOpen);
+          if (willOpen) menu.focus();
+        });
+      });
+
+      menus.forEach(menu => {
+        menu.addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-value]');
+          if (!b) return;
+          const val = b.getAttribute('data-value') || '';
+          const name = menu.dataset.name;
+          const hidden = document.getElementById(name + 'Value');
+          if (hidden) hidden.value = val;
+
+          const arrow = document.querySelector(`.chev[aria-controls="${menu.id}"]`);
+          if (arrow) arrow.setAttribute('aria-expanded', 'false');
+          menu.classList.remove('open');
+
+          // Submit via GET to /bookshelf with the chosen filter (optional)
+          const params = new URLSearchParams(window.location.search);
+          params.set(name, val);
+          window.location.search = params.toString();
+        });
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.filter-block')) closeAll('');
+      });
+
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeAll('');
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -1,4 +1,8 @@
-/* bookshelf.css */
+/* ===== Base ===== */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
 body {
   margin: 0;
   font-family: "Times New Roman", Tinos, serif;
@@ -7,13 +11,14 @@ body {
 
 .container {
   display: flex;
-  height: 100vh;
+  min-height: 100vh;   /* full viewport, grows with content */
+  height: auto;
+  align-items: stretch; /* sidebar & main match tallest */
 }
 
 /* ===== Sidebar ===== */
 .sidebar {
   width: 323px;
-  height: 100%;
   background-color: #f5f2e9;
   padding: 20px;
   display: flex;
@@ -21,14 +26,13 @@ body {
   align-items: flex-start;
 }
 
-/* Figma logo size (stable) */
 .logo {
   width: 178px;
   height: 66px;
   margin-bottom: 40px;
 }
 
-/* “Books In Use” — match label size (18/21, bold + underline) */
+/* Books In Use — match label size */
 .book-count {
   width: 128px;
   height: 26px;
@@ -43,65 +47,80 @@ body {
   margin-bottom: 40px;
 }
 
-/* Labels (Author / Genre / Tags) */
+/* Labels */
 .filter-title {
   font-family: 'Tinos', serif;
   font-weight: 700;
   font-size: 18px;
   line-height: 21px;
   color: #716868;
+  cursor: pointer;
 }
 
 /* Filters layout */
 .filters { display: flex; flex-direction: column; gap: 18px; width: 100%; }
 .filter-block { display: flex; flex-direction: column; gap: 8px; margin-left: 4px; }
 
-/* ===== Transparent native select + custom arrow ===== */
-.select-wrapper {
-  position: relative;
-  width: 200px;
-  display: inline-block;
+/* Title + arrow row */
+.filter-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 200px; /* matches dropdown width */
 }
 
-/* Native select look */
-.select-wrapper select {
+/* Arrow button */
+.chev {
+  width: 22px;
+  height: 22px;
+  background: transparent url("../img/drop_arrow_up.png") no-repeat center / contain;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transform: rotate(180deg);      /* default down */
+  transition: transform 0.18s ease;
+}
+.chev[aria-expanded="true"] {     /* flip when open */
+  transform: rotate(0deg);
+}
+
+/* ===== Dropdown menu ===== */
+.menu {
+  display: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+  width: 200px;
+  list-style: none;
+}
+.menu.open { display: block; }
+
+.menu li { list-style: none; }
+
+.menu button {
   width: 100%;
-  height: 34px;
-  background: transparent;                  /* transparent body */
-  border: 1px solid #716868;                /* set to 'none' to remove frame entirely */
+  text-align: left;
+  padding: 8px 10px;
+  background: none;
+  border: 1px solid transparent;
   border-radius: 4px;
+  font-family: 'Tinos', serif;
+  font-size: 16px;
+  color: #463F3F;
+  cursor: pointer;
+}
+.menu button:hover,
+.menu button:focus {
+  background-color: #f5f2e9;
+  border-color: #d0c8bc;
+  outline: none;
+}
+
+.menu-empty {
+  padding: 8px 10px;
   color: #463F3F;
   font-family: 'Tinos', serif;
   font-size: 16px;
-  padding: 4px 32px 4px 10px;               /* room for custom arrow */
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  outline: none;
-  cursor: pointer;
-}
-
-/* Hide default arrow in old Edge/IE */
-.select-wrapper select::-ms-expand { display: none; }
-
-/* Custom arrow overlay — click-through so select still opens */
-.select-wrapper::after {
-  content: "";
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  width: 18px;
-  height: 18px;
-  transform: translateY(-50%) rotate(180deg);   /* default DOWN (your asset is up) */
-  background: url("../img/drop_arrow_up.png") no-repeat center;
-  background-size: contain;
-  pointer-events: none;                          /* don't block clicks */
-  transition: transform 0.18s ease;
-}
-
-/* Flip arrow when the select is focused/open (CSS-only) */
-.select-wrapper:focus-within::after {
-  transform: translateY(-50%) rotate(0deg);      /* UP */
+  opacity: 0.9;
 }
 
 /* ===== Main content ===== */
@@ -110,10 +129,10 @@ body {
   background-color: #d9d4cb;
   padding: 30px;
   position: relative;
-  overflow-y: auto;
+  overflow-y: visible;  /* page scrolls so background reaches bottom */
 }
 
-/* Top-right buttons (stable) */
+/* Top-right buttons */
 .top-buttons {
   position: absolute;
   top: 20px;
@@ -122,13 +141,15 @@ body {
   gap: 6px;
 }
 
-.top-buttons button {
+.top-buttons button,
+.top-buttons a.icon-btn {
   width: 45px;
   height: 45px;
   background: none;
   border: none;
   padding: 0;
   cursor: pointer;
+  display: inline-flex;
 }
 
 .top-buttons img {
@@ -136,7 +157,7 @@ body {
   height: 100%;
 }
 
-/* Books grid (unchanged) */
+/* Books grid */
 .book-grid {
   display: flex;
   gap: 40px;
@@ -161,7 +182,6 @@ body {
   justify-content: center;
   color: #555;
   font-size: 12px;
-  font-family: var(--font);
   text-align: center;
 }
 
@@ -178,7 +198,7 @@ body {
   width: 51px;
   height: 18px;
   background-color: #00361D;
-  color: white;
+  color: #ffffff;
   font-size: 12px;
   text-align: center;
   line-height: 18px;
@@ -196,26 +216,4 @@ body {
   font-size: 9px;
   width: 60px;
   color: #716868;
-}
-/* === Fix: make main background reach bottom with sidebar === */
-*,
-*::before,
-*::after { box-sizing: border-box; }
-
-/* Let the container grow with content; keep full-viewport minimum */
-.container {
-  min-height: 100vh;
-  height: auto;
-  align-items: stretch; /* ensure both columns match tallest */
-}
-
-/* Sidebar shouldn’t force a fixed height */
-.sidebar {
-  height: auto;          /* override the old height: 100% */
-  box-sizing: border-box;
-}
-
-/* Let the page handle scrolling so the background color reaches the bottom */
-.main-content {
-  overflow-y: visible;    /* was auto; page scrolls instead */
 }
