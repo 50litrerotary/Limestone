@@ -166,17 +166,52 @@ def login():
 
 @app.route('/bookshelf')
 def bookshelf():
-    uid = get_current_user_id()
     db = SessionLocal()
 
-    authors = [row[0] for row in db.query(Book.author).filter_by(owner_id=uid).distinct().all() if row[0]]
-    genres  = [row[0] for row in db.query(Book.genre).filter_by(owner_id=uid).distinct().all() if row[0]]
-    tags    = [row[0] for row in db.query(Tag.name).filter_by(owner_id=uid).distinct().all()]
-
-    book_count = db.query(Book).filter_by(owner_id=uid).count()
+    # dropdown data
+    authors = [row[0] for row in db.query(Book.author).distinct().all() if row[0]]
+    genres  = [row[0] for row in db.query(Book.genre).distinct().all() if row[0]]
+    tags    = [row[0] for row in db.query(Tag.name).distinct().all()]
 
     selected_author = request.args.get('author', '')
     selected_genre  = request.args.get('genre', '')
+
+    # base query + optional filters
+    q = db.query(Book)
+    if selected_author:
+        q = q.filter(Book.author == selected_author)
+    if selected_genre:
+        q = q.filter(Book.genre == selected_genre)
+
+    books_raw = q.order_by(Book.created_at.desc()).all()
+    book_count = db.query(Book).count()
+
+    # build lightweight dicts for the template
+    books = []
+    for b in books_raw:
+        # cover URL: if not provided, use standard placeholder in /static/img/
+        cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
+
+        # reading progress (total pages optional if you ever add it later)
+        current = b.progress.current_page if b.progress else None
+        total   = getattr(b, 'total_pages', None)  # will be None unless you add this column
+
+        meta_bits = []
+        if b.genre:
+            meta_bits.append(b.genre)
+        if b.tags:
+            meta_bits.extend(t.name for t in b.tags)
+        meta_line = ", ".join(meta_bits)
+
+        books.append({
+            "id": b.id,
+            "title": b.title,
+            "author": b.author or "",
+            "cover_url": cover_url,
+            "progress_current": current,
+            "progress_total": total,  # may be None
+            "meta_line": meta_line
+        })
 
     db.close()
 
@@ -187,7 +222,8 @@ def bookshelf():
         tags=tags,
         selected_author=selected_author,
         selected_genre=selected_genre,
-        book_count=book_count
+        book_count=book_count,
+        books=books
     )
 
 @app.route('/register', methods=['GET', 'POST'])

@@ -88,7 +88,31 @@
         </button>
       </div>
 
-      <div class="book-grid"></div>
+      <div class="book-grid">
+  {% if books %}
+    {% for b in books %}
+      <article class="book-item">
+        <div class="book-cover">
+          <img src="{{ b.cover_url }}" alt="{{ b.title }} cover">
+          {% if b.progress_current is not none %}
+            <span class="progress-tag">
+              {{ b.progress_current }}{% if b.progress_total %}/{{ b.progress_total }}{% endif %}
+            </span>
+          {% endif %}
+        </div>
+
+        <div class="book-info">
+          <div class="title">{{ b.title }}</div>
+          {% if b.author %}<div class="author">{{ b.author }}</div>{% endif %}
+          {% if b.meta_line %}<div class="meta">{{ b.meta_line }}</div>{% endif %}
+        </div>
+      </article>
+    {% endfor %}
+  {% else %}
+    <p class="empty-shelf">No books yet. Click the “+” to add your first book.</p>
+  {% endif %}
+</div>
+
     </main>
   </div>
 

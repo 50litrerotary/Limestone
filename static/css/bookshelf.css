@@ -127,12 +127,12 @@ body{
   height: 100%;
 }
 
-/* ---- Books grid placeholder ---- */
+/* ===== Books grid ===== */
 .book-grid{
-  display:flex;
-  gap:40px;
-  margin-top:80px;
-  flex-wrap:wrap;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 36px;            /* row gap / column gap */
+  margin-top: 24px;
 }
 
 /* ---- Modal ---- */
@@ -153,6 +153,73 @@ body{
   overflow:hidden;
 }
 
+/* single card */
+.book-item{
+  width: 140px;              /* matches cover width */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  font-family: "Times New Roman", Tinos, serif;
+}
+/* fixed-size cover box */
+.book-cover{
+  width: 140px;
+  height: 210px;
+  position: relative;
+  border-radius: 4px;
+  background: #efe9df;
+  box-shadow:
+    0 2px 8px rgba(0,0,0,0.10),
+    inset 0 0 0 1px rgba(0,0,0,0.08);
+  overflow: hidden;          /* keeps images neatly inside */
+}
+
+/* cover image */
+.book-cover img{
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;         /* fills box without distortion */
+}
+
+/* progress pill (bottom-left) */
+.progress-tag{
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: #00361D;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+}
+
+/* text below cover */
+.book-info .title{
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 18px;
+  color: #463F3F;
+}
+.book-info .author{
+  margin-top: 2px;
+  font-size: 14px;
+  color: #716868;
+}
+.book-info .meta{
+  margin-top: 2px;
+  font-size: 14px;
+  color: #716868;
+}
+/* empty state */
+.empty-shelf{
+  margin: 10px 0 0 2px;
+  font-size: 16px;
+  color: #463F3F;
+  opacity: .85;
+}
 .modal-header{
   display:flex; align-items:center; justify-content:space-between;
   padding:14px 18px; background:#ece7de; border-bottom:1px solid #ddd5c8;
