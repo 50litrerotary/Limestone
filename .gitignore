@@ -1,23 +1,29 @@
 # Python
 __pycache__/
 *.pyc
-.env
 .venv/
 venv/
+.env
+.env.*
 
 # macOS
 .DS_Store
 
-# Flask livereload cache
+# Flask livereload / caches
 *.egg-info/
 .cache/
+.pytest_cache/
+coverage/
+*.log
 
-# Editor
+# Editors
 .vscode/
 .idea/
+*.swp
 
-# Bytecode
-**/__pycache__/
-
-# Secrets (if any)
+# SQLite (if ever used locally)
 *.sqlite
+
+# App-specific: don't commit user uploads
+static/uploads/*
+!static/uploads/.gitkeep

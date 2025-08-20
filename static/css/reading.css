@@ -1,0 +1,233 @@
+/* Colors from your spec */
+:root{
+  --ai: #B5B1AB;         /* Ask AI panel */
+  --notes: #F5F2E9;      /* Notes bg */
+  --notes-text: #123E2A; /* Notes text */
+  --topbar: #716868;     /* Top strip */
+  --bookbg: #D9D6CD;     /* Middle background */
+  --scroll: #9A9792;     /* Scrollbar thumb */
+  --text: #463F3F;
+  --muted: #716868;
+  --accent: #00361D;
+  --side: #f5f2e9;
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+body{
+  margin:0;
+  font-family: "Times New Roman", Tinos, serif;
+  color: var(--text);
+  background: var(--bookbg);
+}
+
+/* Top bar */
+.topbar{
+  height: 44px;
+  background: var(--topbar);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 12px;
+}
+.topbar .book-title{
+  font-weight: 700;
+  font-size: 16px;
+}
+.topbar .spacer{ flex: 1; }
+
+.exit-btn{
+  width: 36px; height: 36px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.08);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+}
+.exit-btn img{ width: 24px; height: 24px; display:block; }
+
+/* Layout: AI | Reader | Notes */
+.reader-shell{ height: 100%; display:flex; flex-direction: column; }
+.layout{
+  flex: 1;
+  display: grid;
+  grid-template-columns: 260px 1fr 320px; /* AI | middle | notes */
+  gap: 10px;
+  height: calc(100% - 44px);
+  padding: 10px;
+}
+
+/* Ask AI */
+.askai{
+  background: var(--ai);
+  border-radius: 6px;
+  padding: 10px;
+  display:flex; flex-direction: column;
+}
+.askai-head{ font-weight:700; margin-bottom:8px; }
+.ai-form{ display:flex; gap:8px; }
+.ai-form input{
+  flex:1;
+  padding:8px 10px;
+  background:#eee9e0;
+  border:1px solid #cfc6b8;
+  border-radius:6px;
+  outline:none;
+}
+.ai-form .icon-btn{
+  width:40px;height:40px;border:0;background:transparent;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.ai-form img{ width:22px;height:22px;display:block; }
+.ai-out{
+  margin-top:10px;
+  flex:1;
+  white-space:pre-wrap;
+  background:#ece7de;
+  border:1px solid #cfc6b8;
+  border-radius:6px;
+  padding:10px;
+  overflow:auto;
+}
+
+/* Book area */
+.book-area{
+  background: var(--bookbg);
+  border-radius: 6px;
+  display:flex; flex-direction: column;
+  min-width: 0;
+}
+.book-area.with-file .page-wrap{
+  flex:1; min-height:0; /* allow inner scroll */
+  display:flex; align-items: center; justify-content: center;
+  padding: 10px;
+}
+
+/* PDF viewer */
+.pdf-view{
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+/* Fallback block */
+.file-fallback{
+  background:#fff; border:1px solid rgba(0,0,0,0.08);
+  padding:20px; border-radius:6px; text-align:center; max-width:600px;
+}
+.cover-preview{ width:120px; height:auto; display:block; margin:0 auto 10px; }
+
+.book-area.no-file{
+  display:flex; align-items:center; justify-content:center;
+}
+.no-file-msg{
+  text-align:center;
+  background:#fff; border:1px solid rgba(0,0,0,0.08);
+  padding:16px; border-radius:6px;
+}
+
+/* Progress */
+.progress-bar{
+  display:flex; gap:10px; align-items:center;
+  padding:8px 10px; background:#ece7de; border-top:1px solid #d7cfbf; border-radius:0 0 6px 6px;
+}
+.progress-bar input[type="number"]{
+  width:80px; padding:6px 8px; border:1px solid #cfc6b8; border-radius:6px; background:#f5f2e9; outline:none;
+}
+.btn-save{
+  padding:8px 12px; border:1px solid var(--accent); color:#fff; background:var(--accent); border-radius:6px; cursor:pointer;
+}
+
+/* Notes */
+.notes{
+  background: var(--notes);
+  color: var(--notes-text);
+  border-radius: 6px;
+  display:flex; flex-direction: column;
+  min-width: 0;
+}
+.notes.expanded{ grid-column: span 2; } /* when no file, occupy middle width too */
+
+.notes-head{
+  font-weight:700; padding:10px; border-bottom:1px solid #e1dbcf;
+}
+.note-form{ padding:10px; display:flex; flex-direction:column; gap:8px; }
+.note-form .row{ display:flex; gap:8px; }
+.note-form input, .note-form textarea{
+  width:100%; padding:8px 10px; border:1px solid #d0c8bc; border-radius:6px; background:#fff; outline:none; color:var(--notes-text);
+}
+.note-form .actions{ display:flex; justify-content:flex-end; }
+.btn.primary{ background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:6px; padding:8px 12px; cursor:pointer; }
+
+.note-list{ padding:10px; overflow:auto; flex:1; }
+.note{ background:#fff; border:1px solid #e3dccf; border-radius:6px; padding:10px; margin-bottom:8px; color:#2b3a31; }
+.note header{ display:flex; align-items:center; gap:8px; }
+.note .ttl{ font-weight:700; }
+.note .pg{ margin-left:auto; font-size:12px; color:#6a7a70; }
+.note .link.danger{ background:transparent; border:0; color:#9b2c2c; cursor:pointer; }
+.note .txt{ margin-top:6px; white-space:pre-wrap; }
+.note .ts{ margin-top:6px; font-size:12px; color:#7a7a7a; }
+
+/* Scrollbar color (WebKit/Chromium/Edge) */
+*::-webkit-scrollbar{ width:12px; height:12px; }
+*::-webkit-scrollbar-thumb{ background: var(--scroll); border-radius: 8px; border: 2px solid #e9e7e2; }
+*::-webkit-scrollbar-track{ background: #ebe7df; }
+
+:root{
+  --askai-bg: #B5B1AB;
+  --notes-bg: #F5F2E9;
+  --notes-text: #123E2A;
+  --topbar: #716868;
+  --page-bg: #D9D6CD;
+}
+
+body{ margin:0; background:var(--page-bg); color:#463F3F; font-family:"Times New Roman", Tinos, serif; }
+
+.reader-shell{ min-height:100vh; display:flex; flex-direction:column; }
+.topbar{ height:54px; background:var(--topbar); color:#fff; display:flex; align-items:center; gap:12px; padding:0 10px; }
+.topbar .book-title{ font-weight:700; }
+.topbar .spacer{ flex:1; }
+.topbar .exit-btn img{ height:30px; width:auto; display:block; }
+
+.layout{ display:grid; grid-template-columns: 300px 1fr 360px; gap:12px; padding:12px; }
+@media (max-width: 1100px){ .layout{ grid-template-columns: 260px 1fr 320px; } }
+@media (max-width: 880px){ .layout{ grid-template-columns: 1fr; } }
+
+.askai{ background:var(--askai-bg); border:1px solid rgba(0,0,0,.08); border-radius:8px; padding:10px; }
+.askai-head{ font-weight:700; margin-bottom:8px; }
+.ai-form{ display:flex; gap:6px; }
+.ai-form input{ flex:1; padding:8px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
+.ai-form .icon-btn{ width:38px; height:38px; border:0; background:transparent; padding:0; }
+.ai-out{ white-space:pre-wrap; background:rgba(255,255,255,.6); border-radius:8px; padding:8px; margin-top:8px; min-height:80px; }
+
+.book-area.with-file{ background:transparent; display:flex; flex-direction:column; }
+.pdf-scroll{ flex:1; min-height:60vh; max-height:calc(100vh - 54px - 90px); overflow:auto; padding:12px 0; }
+.pdf-pages{ width:100%; }
+
+.book-area.no-file{ display:flex; align-items:center; justify-content:center; }
+.no-file-msg{ text-align:center; }
+.cover-preview{ width:160px; height:auto; display:block; margin:0 auto 10px; }
+
+.progress-bar{ margin:10px auto 0; display:flex; gap:10px; align-items:center; justify-content:center; }
+.progress-bar input{ width:90px; padding:6px 8px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
+.btn-save{ padding:8px 12px; border-radius:8px; border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer; }
+
+.notes{ background:var(--notes-bg); color:var(--notes-text); border:1px solid rgba(0,0,0,.08); border-radius:8px; padding:10px; display:flex; flex-direction:column; }
+.notes.expanded{ grid-column: span 2; }
+.notes-head{ font-weight:700; margin-bottom:8px; }
+.note-form .row{ display:flex; gap:8px; }
+.note-form input, .note-form textarea{ width:100%; padding:8px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
+.note-form .actions{ margin-top:6px; display:flex; justify-content:flex-end; }
+.note-form .btn.primary{ background:#00361D; color:#fff; border:1px solid #00361D; border-radius:8px; padding:8px 12px; cursor:pointer; }
+.note-list{ margin-top:10px; display:flex; flex-direction:column; gap:10px; }
+.note{ background:#fff; color:#463F3F; border:1px solid rgba(0,0,0,.08); border-radius:8px; padding:8px; }
+.note header{ display:flex; align-items:center; gap:8px; }
+.note header .ttl{ font-weight:700; flex:1; }
+.note header .pg{ font-size:12px; opacity:.7; }
+.note header .link.danger{ background:transparent; border:0; color:#b91c1c; cursor:pointer; }
+.note .txt{ margin-top:6px; white-space:pre-wrap; }
+.note .ts{ margin-top:6px; font-size:12px; opacity:.7; }

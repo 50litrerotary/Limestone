@@ -1,9 +1,9 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session, jsonify
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_session
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_session, joinedload
 from datetime import datetime
 import os
 import re
@@ -70,6 +70,7 @@ class ReadingProgress(Base):
     book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), unique=True, nullable=False)
     current_page = Column(Integer, default=0)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    total_pages = Column(Integer, nullable=True)
     book = relationship("Book", back_populates="progress")
 
 class Tag(Base):
@@ -133,6 +134,14 @@ def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
     db.flush()
     return tag
 
+def _build_file_url(file_path: str):
+    """Return a URL for /uploads/<filename> safely, or None if not available."""
+    if not file_path:
+        return None
+    # Accept either "uploads/<fname>" or a bare filename. Always send only the filename to route.
+    fname = os.path.basename(file_path)
+    return url_for('uploaded_file', filename=fname)
+
 @app.teardown_appcontext
 def remove_session(exception=None):
     SessionLocal.remove()
@@ -141,7 +150,8 @@ def remove_session(exception=None):
 
 @app.route('/')
 def root():
-    return redirect(url_for('login'))
+    # Nice touch: if already logged in, go straight to shelf
+    return redirect(url_for('bookshelf') if current_user_id() else url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -248,7 +258,7 @@ def bookshelf():
     for b in books_raw:
         cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
         current = b.progress.current_page if b.progress else None
-        total   = getattr(b, 'total_pages', None)
+        total   = b.progress.total_pages if b.progress else None
         tag_names = [t.name for t in b.tags] if b.tags else []
         meta_bits = []
         if b.genre:
@@ -403,13 +413,8 @@ def delete_book(book_id):
         db.delete(book)
         db.flush()
 
-        # cleanup: remove any of this user's tags that no longer have books
-        orphan_tags = (
-            db.query(Tag)
-            .filter(Tag.owner_id == uid)
-            .all()
-        )
-        for t in orphan_tags:
+        # cleanup orphan tags for this user
+        for t in db.query(Tag).filter(Tag.owner_id == uid).all():
             if not t.books:
                 db.delete(t)
 
@@ -426,6 +431,169 @@ def delete_book(book_id):
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
+
+# ---- Reading page ----
+@app.route('/read/<int:book_id>')
+def read_book(book_id):
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
+    db = SessionLocal()
+
+    book = (
+        db.query(Book)
+        .options(joinedload(Book.progress), joinedload(Book.notes))
+        .filter(Book.id == book_id, Book.owner_id == uid)
+        .first()
+    )
+    if not book:
+        db.close()
+        flash("Book not found.", "error")
+        return redirect(url_for('bookshelf'))
+
+    prog = book.progress
+    current_page = prog.current_page if prog else 0
+    total_pages = prog.total_pages if prog else None
+
+    cover_url = book.cover_path or url_for('static', filename='img/cover_placeholder.png')
+    file_url = _build_file_url(book.file_path) if book.file_path else None
+
+    db.close()
+    return render_template(
+        'reading.html',
+        book=book,
+        cover_url=cover_url,
+        file_url=file_url,
+        current_page=current_page,
+        total_pages=total_pages
+    )
+
+# ---- Notes (RESTORED) ----
+@app.route('/books/<int:book_id>/notes', methods=['POST'])
+def add_note(book_id):
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
+    title = (request.form.get('title') or '').strip()
+    text  = (request.form.get('text') or '').strip()
+    page  = request.form.get('page')
+    page  = int(page) if (page is not None and str(page).isdigit()) else None
+
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            flash("Book not found.", "error")
+            return redirect(url_for('bookshelf'))
+        n = Note(owner_id=uid, book_id=book.id, page=page, title=title or None, text=text or None)
+        db.add(n)
+        db.commit()
+        flash("Note added.", "success")
+    except Exception as e:
+        db.rollback()
+        flash("Couldn't add note.", "error")
+        print("Add note error:", e)
+    finally:
+        db.close()
+    return redirect(url_for('read_book', book_id=book_id))
+
+@app.route('/notes/<int:note_id>/delete', methods=['POST'])
+def delete_note(note_id):
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
+    db = SessionLocal()
+    try:
+        note = db.query(Note).filter(Note.id == note_id, Note.owner_id == uid).first()
+        if not note:
+            db.close()
+            flash("Note not found.", "error")
+            return redirect(url_for('bookshelf'))
+        bid = note.book_id
+        db.delete(note)
+        db.commit()
+        flash("Note removed.", "success")
+        return redirect(url_for('read_book', book_id=bid))
+    except Exception as e:
+        db.rollback()
+        flash("Couldn't remove note.", "error")
+        print("Delete note error:", e)
+        return redirect(url_for('bookshelf'))
+    finally:
+        db.close()
+
+# ---- Progress (HTML form) ----
+@app.route("/books/<int:book_id>/progress", methods=["POST"])
+def update_progress(book_id):
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
+    page = max(0, int(request.form.get("page", 0) or 0))
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            flash("Book not found.", "error")
+            return redirect(url_for("bookshelf"))
+        if not book.progress:
+            book.progress = ReadingProgress(book_id=book.id, current_page=page)
+        else:
+            book.progress.current_page = page
+        db.commit()
+        return redirect(url_for("read_book", book_id=book_id))
+    except Exception as e:
+        db.rollback()
+        flash("Couldn't update progress.", "error")
+        print("Progress error:", e)
+        return redirect(url_for("read_book", book_id=book_id))
+    finally:
+        db.close()
+
+# ---- Progress (JSON for PDF viewer) ----
+@app.route('/api/books/<int:book_id>/progress', methods=['POST'])
+def api_update_progress(book_id):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    page = int(data.get("page") or 0)
+    total = data.get("total")
+    total = int(total) if (total is not None and str(total).isdigit()) else None
+
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        if not book.progress:
+            book.progress = ReadingProgress(book_id=book.id)
+
+        # clamp
+        if total and page > total:
+            page = total
+        if page < 0:
+            page = 0
+
+        book.progress.current_page = page
+        if total is not None:
+            book.progress.total_pages = total
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        print("API progress error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+# ---- Ask AI stub ----
+@app.route('/api/ask_ai', methods=['POST'])
+def ask_ai():
+    q = (request.form.get('q') or '').strip()
+    return jsonify({"ok": True, "answer": "AI summary is coming soon. (Stub)\n\nQuestion: " + (q or "(empty)")})
 
 if __name__ == '__main__':
     server = Server(app.wsgi_app)

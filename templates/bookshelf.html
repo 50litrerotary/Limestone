@@ -8,16 +8,11 @@
 </head>
 <body>
   <div class="container">
-    <!-- Sidebar -->
     <aside class="sidebar">
       <img class="logo" src="{{ url_for('static', filename='img/logo_2.png') }}" alt="Limestone" />
-
       <div class="book-count">{{ book_count or 0 }} Books In Use</div>
 
-      <!-- Filters -->
       <div class="filters">
-
-        <!-- Author -->
         <div class="filter-block">
           <div class="filter-row">
             <span class="filter-title" data-controls="author-menu">Author</span>
@@ -31,13 +26,11 @@
             {% else %}
               <li class="menu-empty">No authors yet</li>
             {% endif %}
-            <!-- Reset option -->
             <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
           <input type="hidden" id="authorValue" name="author" value="{{ selected_author or '' }}">
         </div>
 
-        <!-- Genre -->
         <div class="filter-block">
           <div class="filter-row">
             <span class="filter-title" data-controls="genre-menu">Genre</span>
@@ -51,13 +44,11 @@
             {% else %}
               <li class="menu-empty">No genres yet</li>
             {% endif %}
-            <!-- Reset option -->
             <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
           <input type="hidden" id="genreValue" name="genre" value="{{ selected_genre or '' }}">
         </div>
 
-        <!-- Tags -->
         <div class="filter-block">
           <div class="filter-row">
             <span class="filter-title" data-controls="tag-menu">Tags</span>
@@ -71,19 +62,16 @@
             {% else %}
               <li class="menu-empty">No tags yet</li>
             {% endif %}
-            <!-- Reset option -->
             <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
-          <input type="hidden" id="tagValue" name="tag" value="">
+          <input type="hidden" id="tagValue" name="tag" value="{{ selected_tag or '' }}">
         </div>
-
       </div>
     </aside>
 
-    <!-- Main content -->
     <main class="main-content">
       <div class="top-buttons">
-        <a href="{{ url_for('login') }}" title="Logout" class="icon-btn">
+        <a href="{{ url_for('logout') }}" title="Logout" class="icon-btn">
           <img src="{{ url_for('static', filename='img/logout.png') }}" alt="Logout">
         </a>
         <button title="Search" class="icon-btn">
@@ -94,7 +82,6 @@
         </button>
       </div>
 
-      <!-- Books grid -->
       <div class="book-grid">
         {% if books %}
           {% for b in books %}
@@ -109,20 +96,16 @@
               tabindex="0"
             >
               <div class="book-cover">
-                <!-- Format badge -->
                 <span class="badge-format {{ 'digital' if b.is_digital else 'physical' }}">
                   {{ 'Digital' if b.is_digital else 'Physical' }}
                 </span>
-
                 <img src="{{ b.cover_url }}" alt="{{ b.title }} cover">
-
                 {% if b.progress_current is not none %}
                   <span class="progress-tag">
                     {{ b.progress_current }}{% if b.progress_total %}/{{ b.progress_total }}{% endif %}
                   </span>
                 {% endif %}
               </div>
-
               <div class="book-info">
                 <div class="title">{{ b.title }}</div>
                 {% if b.author %}<div class="author">{{ b.author }}</div>{% endif %}
@@ -135,20 +118,18 @@
         {% endif %}
       </div>
 
-      <!-- Context menu (left-click or right-click) -->
       <div id="bookCtxMenu" class="ctx-menu" role="menu" aria-hidden="true">
+        <button type="button" data-action="open">Open book</button>
         <button type="button" data-action="edit">Edit book</button>
         <button type="button" data-action="remove">Remove book</button>
         <hr style="border:none;height:1px;background:rgba(0,0,0,.06);margin:4px 0;">
         <button type="button" data-action="close">Cancel</button>
       </div>
 
-      <!-- Hidden form for POST actions -->
       <form id="hiddenPostForm" method="post" style="display:none"></form>
     </main>
   </div>
 
-  <!-- Add/Edit Book Modal -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
       <div class="modal-header">
@@ -198,12 +179,8 @@
     </div>
   </div>
 
-  <!-- JS: dropdowns + modal + context menu -->
   <script>
     (function () {
-      /* ----------------------------
-         Dropdowns (Author/Genre/Tag)
-      -----------------------------*/
       const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
       const menus  = Array.from(document.querySelectorAll('.menu'));
 
@@ -219,10 +196,8 @@
           const id = el.getAttribute('aria-controls') || el.dataset.controls;
           const menu = document.getElementById(id);
           if (!menu) return;
-
           const arrow = document.querySelector(`.chev[aria-controls="${id}"]`);
           const willOpen = !(arrow && arrow.getAttribute('aria-expanded') === 'true');
-
           closeAll(id);
           if (arrow) arrow.setAttribute('aria-expanded', String(willOpen));
           menu.classList.toggle('open', willOpen);
@@ -255,9 +230,6 @@
       });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(''); });
 
-      /* --------------
-         Add/Edit Modal
-      ---------------*/
       const modal = document.getElementById('addModal');
       const openBtn = document.getElementById('openAddModal');
       const closeBtn = document.getElementById('closeAddModal');
@@ -273,19 +245,15 @@
       const submitBtn = document.getElementById('submitBtn');
       const modalTitle = document.getElementById('addModalTitle');
 
-      function openModal() {
-        modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false');
-      }
-      function closeModal() {
-        modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true');
-      }
+      function openModal() { modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false'); }
+      function closeModal() { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); }
+
       function enterAddMode() {
         modalTitle.textContent = 'Add a Book';
         submitBtn.textContent = 'Add';
         form.action = "{{ url_for('add_book') }}";
         fileWrap.style.display = '';
         fileInput.disabled = false;
-        // clear fields
         titleEl.value = '';
         authorEl.value = '';
         genreEl.value = '';
@@ -297,10 +265,8 @@
         modalTitle.textContent = 'Edit Book';
         submitBtn.textContent = 'Save';
         form.action = `/books/${book.dataset.bookId}/edit`;
-        // hide and disable file field (file remains as-is)
         fileWrap.style.display = 'none';
         fileInput.disabled = true;
-        // prefill
         titleEl.value = book.dataset.title || '';
         authorEl.value = book.dataset.author || '';
         genreEl.value = book.dataset.genre || '';
@@ -316,12 +282,8 @@
       closeBtn.addEventListener('click', closeModal);
       cancelBtn.addEventListener('click', closeModal);
       modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-      form.addEventListener('submit', () => { /* real submit */ });
+      form.addEventListener('submit', () => {});
 
-      /* -------------------------
-         Book context menu
-         (left-click & right-click)
-      --------------------------*/
       const ctx = document.getElementById('bookCtxMenu');
       let ctxTarget = null;
 
@@ -357,10 +319,12 @@
         if (!btn) return;
         const action = btn.dataset.action;
         if (!ctxTarget) { closeCtx(); return; }
-
         const id = ctxTarget.dataset.bookId;
 
-        if (action === 'edit') {
+        if (action === 'open') {
+          closeCtx();
+          window.location.href = `/read/${id}`;
+        } else if (action === 'edit') {
           enterEditMode(ctxTarget);
           closeCtx();
           openModal();
