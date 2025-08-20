@@ -1,10 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
-)
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_session
 from datetime import datetime
 import os
@@ -15,8 +13,7 @@ app.secret_key = "super-secret-key"
 
 # ---- File uploads ----
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
+UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_COVER = {"png", "jpg", "jpeg", "webp"}
@@ -24,18 +21,6 @@ ALLOWED_FILE = {"pdf", "epub", "mobi"}
 
 def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
-
-def _delete_static_file(relpath: str):
-    """Delete a file under /static if it exists (ignore errors)."""
-    if not relpath:
-        return
-    # only allow deleting inside /static
-    abs_path = os.path.abspath(os.path.join(STATIC_DIR, relpath))
-    if abs_path.startswith(STATIC_DIR) and os.path.exists(abs_path):
-        try:
-            os.remove(abs_path)
-        except Exception:
-            pass
 
 # --- DB CONFIG ---
 DATABASE_URI = "mysql://limestone_user:StrongLocalPass!23@localhost/limestone"
@@ -70,8 +55,8 @@ class Book(Base):
     author = Column(String(255), nullable=True)
     genre = Column(String(100), nullable=True)
 
-    cover_path = Column(String(500), nullable=True)  # e.g. "uploads/.."
-    file_path = Column(String(500), nullable=True)   # e.g. "uploads/.."
+    cover_path = Column(String(500), nullable=True)
+    file_path = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="books")
@@ -132,7 +117,7 @@ EMAIL_REGEX = re.compile(
 )
 
 def get_current_user_id():
-    # TODO: replace with Flask-Login; for now assume demo user id = 1
+    # TODO replace with Flask-Login; demo user:
     return 1
 
 def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
@@ -159,23 +144,53 @@ def login():
     if request.method == 'POST':
         typed_email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-
         if not EMAIL_REGEX.match(typed_email):
             flash("Please enter a valid email address (e.g., name@example.com).", "error")
             return render_template('login.html', email=typed_email)
-
         db = SessionLocal()
         user = db.query(User).filter_by(email=typed_email).first()
         ok = bool(user and check_password_hash(user.password_hash, password))
         db.close()
-
         if ok:
             return redirect(url_for('bookshelf'), code=302)
-
         flash("Invalid email or password", "error")
         return render_template('login.html', email=typed_email)
-
     return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    email = ""
+    email_error = ""
+    password_error = ""
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        password = request.form.get('password', '')
+        has_errors = False
+        if not EMAIL_REGEX.match(email):
+            email_error = "Please enter a valid email address (e.g., name@example.com)."
+            has_errors = True
+        if len(password) < 8:
+            password_error = "Password must be at least 8 characters long."
+            has_errors = True
+        db = SessionLocal()
+        if not has_errors and db.query(User).filter_by(email=email).first():
+            email_error = "Email already registered."
+            has_errors = True
+        if has_errors:
+            db.close()
+            return render_template('register.html', email=email, email_error=email_error, password_error=password_error)
+        hashed_pw = generate_password_hash(password)
+        db.add(User(email=email, password_hash=hashed_pw))
+        db.commit()
+        db.close()
+        flash("Registration successful! Please log in.", "success")
+        return redirect(url_for('login'))
+    return render_template('register.html', email=email)
+
+@app.route('/logout')
+def logout():
+    flash("Logged out successfully.", "success")
+    return redirect(url_for('login'))
 
 @app.route('/bookshelf')
 def bookshelf():
@@ -202,14 +217,12 @@ def bookshelf():
         cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
         current = b.progress.current_page if b.progress else None
         total   = getattr(b, 'total_pages', None)
-
         meta_bits = []
         if b.genre:
             meta_bits.append(b.genre)
         if b.tags:
             meta_bits.extend(t.name for t in b.tags)
         meta_line = ", ".join(meta_bits)
-
         books.append({
             "id": b.id,
             "title": b.title,
@@ -221,59 +234,10 @@ def bookshelf():
         })
 
     db.close()
-
-    return render_template(
-        'bookshelf.html',
-        authors=authors,
-        genres=genres,
-        tags=tags,
-        selected_author=selected_author,
-        selected_genre=selected_genre,
-        book_count=book_count,
-        books=books
-    )
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    email = ""
-    email_error = ""
-    password_error = ""
-
-    if request.method == 'POST':
-        email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '')
-        has_errors = False
-
-        if not EMAIL_REGEX.match(email):
-            email_error = "Please enter a valid email address (e.g., name@example.com)."
-            has_errors = True
-        if len(password) < 8:
-            password_error = "Password must be at least 8 characters long."
-            has_errors = True
-
-        db = SessionLocal()
-        if not has_errors and db.query(User).filter_by(email=email).first():
-            email_error = "Email already registered."
-            has_errors = True
-
-        if has_errors:
-            db.close()
-            return render_template('register.html', email=email, email_error=email_error, password_error=password_error)
-
-        hashed_pw = generate_password_hash(password)
-        db.add(User(email=email, password_hash=hashed_pw))
-        db.commit()
-        db.close()
-
-        flash("Registration successful! Please log in.", "success")
-        return redirect(url_for('login'))
-
-    return render_template('register.html', email=email)
-
-@app.route('/logout')
-def logout():
-    flash("Logged out successfully.", "success")
-    return redirect(url_for('login'))
+    return render_template('bookshelf.html',
+                           authors=authors, genres=genres, tags=tags,
+                           selected_author=selected_author, selected_genre=selected_genre,
+                           book_count=book_count, books=books)
 
 # ---- Add Book ----
 @app.route('/books/new', methods=['POST'])
@@ -315,9 +279,7 @@ def add_book():
         )
         db.add(book)
         db.flush()
-
         db.add(ReadingProgress(book_id=book.id, current_page=0))
-
         if tags_raw:
             for raw in re.split(r"[,\n]", tags_raw):
                 name = raw.strip()
@@ -325,7 +287,6 @@ def add_book():
                     continue
                 tag = get_or_create_tag(db, uid, name)
                 book.tags.append(tag)
-
         db.commit()
         flash("Book added to your shelf!", "success")
     except Exception as e:
@@ -337,7 +298,57 @@ def add_book():
 
     return redirect(url_for('bookshelf'))
 
-# ---- Delete Book (AJAX) ----
+# ---- Edit Book (metadata + optional cover; file is NOT changed) ----
+@app.route('/books/<int:book_id>/edit', methods=['POST'])
+def edit_book(book_id):
+    uid = get_current_user_id()
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            flash("Book not found.", "error")
+            return redirect(url_for('bookshelf'))
+
+        title  = (request.form.get('title') or "").strip()
+        author = (request.form.get('author') or "").strip()
+        genre  = (request.form.get('genre') or "").strip()
+        tags_raw = (request.form.get('tags') or "").strip()
+
+        if title:
+            book.title = title
+        book.author = author or None
+        book.genre  = genre or None
+
+        # Optional new cover
+        cover = request.files.get('cover')
+        if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
+            fname = f"{uid}_{int(datetime.utcnow().timestamp())}_cover_{secure_filename(cover.filename)}"
+            cover.save(os.path.join(UPLOAD_DIR, fname))
+            book.cover_path = f"uploads/{fname}"
+
+        # Replace tags with submitted set
+        book.tags.clear()
+        if tags_raw:
+            for raw in re.split(r"[,\n]", tags_raw):
+                name = raw.strip()
+                if not name:
+                    continue
+                tag = get_or_create_tag(db, uid, name)
+                book.tags.append(tag)
+
+        db.commit()
+        flash("Book updated.", "success")
+    except Exception as e:
+        db.rollback()
+        flash("Could not update book.", "error")
+        print("Edit book error:", e)
+    finally:
+        db.close()
+
+    return redirect(url_for('bookshelf'))
+
+# ---- Delete Book ----
 @app.route('/books/<int:book_id>/delete', methods=['POST'])
 def delete_book(book_id):
     uid = get_current_user_id()
@@ -346,23 +357,20 @@ def delete_book(book_id):
         book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
         if not book:
             db.close()
-            return jsonify({"ok": False, "error": "Not found"}), 404
-
-        # Remove files if they exist
-        _delete_static_file(book.cover_path)
-        _delete_static_file(book.file_path)
-
-        db.delete(book)  # cascades to progress/notes/tags link table
+            flash("Book not found.", "error")
+            return redirect(url_for('bookshelf'))
+        db.delete(book)
         db.commit()
-        return jsonify({"ok": True})
+        flash("Book removed.", "success")
     except Exception as e:
         db.rollback()
+        flash("Could not remove book.", "error")
         print("Delete book error:", e)
-        return jsonify({"ok": False, "error": "Server error"}), 500
     finally:
         db.close()
+    return redirect(url_for('bookshelf'))
 
-# Optional: serve uploaded files (covers) if needed locally
+# Optional: serve uploaded files
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
