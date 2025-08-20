@@ -1,5 +1,4 @@
-# app.py
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -23,22 +22,7 @@ ALLOWED_FILE = {"pdf", "epub", "mobi"}
 def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
-def _save_to_uploads(file_storage, prefix: str, uid: int) -> str:
-    """Save and return just the filename (not a path)."""
-    ts = int(datetime.utcnow().timestamp())
-    fname = f"{uid}_{ts}_{prefix}_{secure_filename(file_storage.filename)}"
-    file_storage.save(os.path.join(UPLOAD_DIR, fname))
-    return fname  # store only the bare filename
-
-def _public_upload_url(path_or_name: str | None) -> str | None:
-    """Return a usable URL for an uploaded file name or legacy 'uploads/...' path."""
-    if not path_or_name:
-        return None
-    name = os.path.basename(path_or_name)
-    return url_for('uploaded_file', filename=name)
-
 # --- DB CONFIG ---
-# Tip: if you use PyMySQL, change to "mysql+pymysql://..."
 DATABASE_URI = "mysql://limestone_user:StrongLocalPass!23@localhost/limestone"
 engine = create_engine(DATABASE_URI, pool_pre_ping=True, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
@@ -71,8 +55,8 @@ class Book(Base):
     author = Column(String(255), nullable=True)
     genre  = Column(String(100), nullable=True)
 
-    cover_path = Column(String(500), nullable=True)  # stores filename only (new), but legacy values okay
-    file_path  = Column(String(500), nullable=True)  # stores filename only (new)
+    cover_path = Column(String(500), nullable=True)
+    file_path  = Column(String(500), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="books")
@@ -132,9 +116,13 @@ EMAIL_REGEX = re.compile(
     r"^(?=.{1,254}$)(?=.{1,64}@)[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}$"
 )
 
-def get_current_user_id():
-    # TODO replace with Flask-Login; demo user:
-    return 1
+def current_user_id():
+    return session.get("uid")
+
+def require_login():
+    if not current_user_id():
+        return redirect(url_for("login"))
+    return None
 
 def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
     tag = db.query(Tag).filter_by(owner_id=owner_id, name=name).first()
@@ -168,6 +156,7 @@ def login():
         ok = bool(user and check_password_hash(user.password_hash, password))
         db.close()
         if ok:
+            session['uid'] = user.id
             return redirect(url_for('bookshelf'), code=302)
         flash("Invalid email or password", "error")
         return render_template('login.html', email=typed_email)
@@ -205,20 +194,41 @@ def register():
 
 @app.route('/logout')
 def logout():
+    session.clear()
     flash("Logged out successfully.", "success")
     return redirect(url_for('login'))
 
 @app.route('/bookshelf')
 def bookshelf():
-    uid = get_current_user_id()
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
     db = SessionLocal()
 
-    # dropdown data limited to current user
-    authors = [row[0] for row in db.query(Book.author).filter(Book.owner_id == uid, Book.author.isnot(None)).distinct().all()]
-    genres  = [row[0] for row in db.query(Book.genre ).filter(Book.owner_id == uid, Book.genre .isnot(None)).distinct().all()]
-    tags    = [row[0] for row in db.query(Tag.name).filter(Tag.owner_id == uid).distinct().all()]
+    authors = [
+        row[0]
+        for row in db.query(Book.author)
+        .filter(Book.owner_id == uid, Book.author.isnot(None), Book.author != "")
+        .distinct()
+        .all()
+    ]
+    genres = [
+        row[0]
+        for row in db.query(Book.genre)
+        .filter(Book.owner_id == uid, Book.genre.isnot(None), Book.genre != "")
+        .distinct()
+        .all()
+    ]
+    tags = [
+        t[0]
+        for t in db.query(Tag.name)
+        .join(book_tags, Tag.id == book_tags.c.tag_id)
+        .join(Book, Book.id == book_tags.c.book_id)
+        .filter(Tag.owner_id == uid, Book.owner_id == uid)
+        .distinct()
+        .all()
+    ]
 
-    # filters
     selected_author = request.args.get('author', '').strip()
     selected_genre  = request.args.get('genre', '').strip()
     selected_tag    = request.args.get('tag', '').strip()
@@ -229,20 +239,16 @@ def bookshelf():
     if selected_genre:
         q = q.filter(Book.genre == selected_genre)
     if selected_tag:
-        q = q.join(Book.tags).filter(Tag.name == selected_tag)
+        q = q.join(Book.tags).filter(Tag.name == selected_tag, Tag.owner_id == uid)
 
     books_raw = q.order_by(Book.created_at.desc()).all()
     book_count = db.query(Book).filter(Book.owner_id == uid).count()
 
-    # --------- FIXED bad indentation here ----------
     books = []
     for b in books_raw:
-        # cover URL (placeholder if none). Works for legacy 'uploads/...' values too.
-        cover_url = _public_upload_url(b.cover_path) or url_for('static', filename='img/cover_placeholder.png')
-
+        cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
         current = b.progress.current_page if b.progress else None
         total   = getattr(b, 'total_pages', None)
-
         tag_names = [t.name for t in b.tags] if b.tags else []
         meta_bits = []
         if b.genre:
@@ -250,7 +256,6 @@ def bookshelf():
         if tag_names:
             meta_bits.extend(tag_names)
         meta_line = ", ".join(meta_bits)
-
         books.append({
             "id": b.id,
             "title": b.title,
@@ -272,10 +277,11 @@ def bookshelf():
         book_count=book_count, books=books
     )
 
-# ---- Add Book ----
 @app.route('/books/new', methods=['POST'])
 def add_book():
-    uid = get_current_user_id()
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
     title = (request.form.get('title') or "").strip()
     author = (request.form.get('author') or "").strip()
     genre  = (request.form.get('genre')  or "").strip()
@@ -290,11 +296,15 @@ def add_book():
 
     cover = request.files.get('cover')
     if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
-        cover_path = _save_to_uploads(cover, "cover", uid)  # store filename only
+        fname = f"{uid}_{int(datetime.utcnow().timestamp())}_cover_{secure_filename(cover.filename)}"
+        cover.save(os.path.join(UPLOAD_DIR, fname))
+        cover_path = f"uploads/{fname}"
 
     doc = request.files.get('file')
     if doc and doc.filename and _ext_ok(doc.filename, ALLOWED_FILE):
-        file_path = _save_to_uploads(doc, "file", uid)      # store filename only
+        fname = f"{uid}_{int(datetime.utcnow().timestamp())}_file_{secure_filename(doc.filename)}"
+        doc.save(os.path.join(UPLOAD_DIR, fname))
+        file_path = f"uploads/{fname}"
 
     db = SessionLocal()
     try:
@@ -329,10 +339,11 @@ def add_book():
 
     return redirect(url_for('bookshelf'))
 
-# ---- Edit Book (metadata + optional cover; file is NOT changed) ----
 @app.route('/books/<int:book_id>/edit', methods=['POST'])
 def edit_book(book_id):
-    uid = get_current_user_id()
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
     db = SessionLocal()
     try:
         book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
@@ -353,9 +364,10 @@ def edit_book(book_id):
 
         cover = request.files.get('cover')
         if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
-            book.cover_path = _save_to_uploads(cover, "cover", uid)
+            fname = f"{uid}_{int(datetime.utcnow().timestamp())}_cover_{secure_filename(cover.filename)}"
+            cover.save(os.path.join(UPLOAD_DIR, fname))
+            book.cover_path = f"uploads/{fname}"
 
-        # Replace tags set
         book.tags.clear()
         if tags_raw:
             for raw in re.split(r"[,\n]", tags_raw):
@@ -376,10 +388,11 @@ def edit_book(book_id):
 
     return redirect(url_for('bookshelf'))
 
-# ---- Delete Book ----
 @app.route('/books/<int:book_id>/delete', methods=['POST'])
 def delete_book(book_id):
-    uid = get_current_user_id()
+    if (redir := require_login()):
+        return redir
+    uid = current_user_id()
     db = SessionLocal()
     try:
         book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
@@ -388,6 +401,18 @@ def delete_book(book_id):
             flash("Book not found.", "error")
             return redirect(url_for('bookshelf'))
         db.delete(book)
+        db.flush()
+
+        # cleanup: remove any of this user's tags that no longer have books
+        orphan_tags = (
+            db.query(Tag)
+            .filter(Tag.owner_id == uid)
+            .all()
+        )
+        for t in orphan_tags:
+            if not t.books:
+                db.delete(t)
+
         db.commit()
         flash("Book removed.", "success")
     except Exception as e:
@@ -398,12 +423,10 @@ def delete_book(book_id):
         db.close()
     return redirect(url_for('bookshelf'))
 
-# Serve uploaded files (covers/files)
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
-# --- DEV SERVER ---
 if __name__ == '__main__':
     server = Server(app.wsgi_app)
     server.serve(port=5001, debug=True)
