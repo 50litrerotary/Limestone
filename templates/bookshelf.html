@@ -5,13 +5,40 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Limestone | Bookshelf</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/bookshelf.css') }}">
+
+  <!-- Minimal styles for the right‑click menu -->
+  <style>
+    .ctx-menu{
+      position: fixed;
+      z-index: 9999;
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.12);
+      box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+      border-radius: 8px;
+      padding: 6px;
+      display: none;
+      min-width: 160px;
+      font-family: "Times New Roman", Tinos, serif;
+    }
+    .ctx-menu button{
+      width: 100%;
+      padding: 8px 10px;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      font-size: 15px;
+      color: #463F3F;
+      border-radius: 6px;
+    }
+    .ctx-menu button:hover{ background: rgba(0,0,0,0.05); }
+  </style>
 </head>
 <body>
   <div class="container">
     <!-- Sidebar -->
     <aside class="sidebar">
       <img class="logo" src="{{ url_for('static', filename='img/logo_2.png') }}" alt="Limestone" />
-
       <div class="book-count">{{ book_count or 0 }} Books In Use</div>
 
       <!-- Filters -->
@@ -89,30 +116,29 @@
       </div>
 
       <div class="book-grid">
-  {% if books %}
-    {% for b in books %}
-      <article class="book-item">
-        <div class="book-cover">
-          <img src="{{ b.cover_url }}" alt="{{ b.title }} cover">
-          {% if b.progress_current is not none %}
-            <span class="progress-tag">
-              {{ b.progress_current }}{% if b.progress_total %}/{{ b.progress_total }}{% endif %}
-            </span>
-          {% endif %}
-        </div>
+        {% if books %}
+          {% for b in books %}
+            <article class="book-item" data-book-id="{{ b.id }}">
+              <div class="book-cover">
+                <img src="{{ b.cover_url }}" alt="{{ b.title }} cover">
+                {% if b.progress_current is not none %}
+                  <span class="progress-tag">
+                    {{ b.progress_current }}{% if b.progress_total %}/{{ b.progress_total }}{% endif %}
+                  </span>
+                {% endif %}
+              </div>
 
-        <div class="book-info">
-          <div class="title">{{ b.title }}</div>
-          {% if b.author %}<div class="author">{{ b.author }}</div>{% endif %}
-          {% if b.meta_line %}<div class="meta">{{ b.meta_line }}</div>{% endif %}
-        </div>
-      </article>
-    {% endfor %}
-  {% else %}
-    <p class="empty-shelf">No books yet. Click the “+” to add your first book.</p>
-  {% endif %}
-</div>
-
+              <div class="book-info">
+                <div class="title">{{ b.title }}</div>
+                {% if b.author %}<div class="author">{{ b.author }}</div>{% endif %}
+                {% if b.meta_line %}<div class="meta">{{ b.meta_line }}</div>{% endif %}
+              </div>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p class="empty-shelf">No books yet. Click the “+” to add your first book.</p>
+        {% endif %}
+      </div>
     </main>
   </div>
 
@@ -124,7 +150,7 @@
         <button id="closeAddModal" class="close-btn" aria-label="Close">×</button>
       </div>
 
-      <form id="addBookForm" class="modal-body">
+      <form id="addBookForm" class="modal-body" action="{{ url_for('add_book') }}" method="post" enctype="multipart/form-data">
         <div class="field">
           <label>Title</label>
           <input type="text" name="title" placeholder="Book title" required>
@@ -165,10 +191,15 @@
     </div>
   </div>
 
-  <!-- JS: dropdowns + modal open/close (no backend calls yet) -->
+  <!-- Right-click menu -->
+  <div id="bookCtx" class="ctx-menu" role="menu" aria-hidden="true">
+    <button type="button" id="ctxRemove">🗑 Remove book</button>
+  </div>
+
+  <!-- JS: dropdowns + modal + right-click delete -->
   <script>
     (function () {
-      // dropdowns
+      // ===== dropdowns (unchanged) =====
       const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
       const menus  = Array.from(document.querySelectorAll('.menu'));
 
@@ -217,7 +248,7 @@
       });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(''); });
 
-      // modal
+      // ===== modal =====
       const modal = document.getElementById('addModal');
       const openBtn = document.getElementById('openAddModal');
       const closeBtn = document.getElementById('closeAddModal');
@@ -231,13 +262,59 @@
       cancelBtn.addEventListener('click', closeModal);
       modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-      // placeholder submission (frontend only)
-      document.getElementById('addBookForm').addEventListener('submit', (e) => {
+      // ===== right-click delete =====
+      const ctx = document.getElementById('bookCtx');
+      const removeBtn = document.getElementById('ctxRemove');
+      let ctxTarget = null;
+
+      function hideCtx(){ ctx.style.display = 'none'; ctx.setAttribute('aria-hidden','true'); ctxTarget = null; }
+
+      document.addEventListener('contextmenu', (e) => {
+        const item = e.target.closest('.book-item');
+        if (!item) return; // let browser default on non-book areas
         e.preventDefault();
-        // you’ll wire this to POST /books later
-        closeModal();
-        alert('Book captured (frontend). Hook this up to your Flask /books route.');
+        ctxTarget = item;
+
+        // position near cursor, keep inside viewport
+        const pad = 4;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let x = e.clientX, y = e.clientY;
+        ctx.style.display = 'block';
+        const rect = ctx.getBoundingClientRect();
+        if (x + rect.width + pad > vw) x = vw - rect.width - pad;
+        if (y + rect.height + pad > vh) y = vh - rect.height - pad;
+        ctx.style.left = x + 'px';
+        ctx.style.top  = y + 'px';
+        ctx.setAttribute('aria-hidden','false');
       });
+
+      removeBtn.addEventListener('click', async () => {
+        if (!ctxTarget) return hideCtx();
+        const id = ctxTarget.getAttribute('data-book-id');
+        const title = ctxTarget.querySelector('.title')?.textContent?.trim() || 'this book';
+        if (!confirm(`Remove “${title}”? This cannot be undone.`)) return hideCtx();
+
+        try {
+          const res = await fetch(`/books/${id}/delete`, { method: 'POST' });
+          const data = await res.json();
+          if (data.ok) {
+            ctxTarget.remove();
+          } else {
+            alert(data.error || 'Could not delete the book.');
+          }
+        } catch {
+          alert('Network error. Try again.');
+        } finally {
+          hideCtx();
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.ctx-menu')) hideCtx();
+      });
+      window.addEventListener('resize', hideCtx);
+      window.addEventListener('scroll', hideCtx, true);
+      document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') hideCtx(); });
     })();
   </script>
 </body>

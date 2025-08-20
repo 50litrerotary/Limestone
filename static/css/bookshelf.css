@@ -258,3 +258,52 @@ body{
 .btn.primary:hover{ filter:brightness(1.04); }
 .btn.ghost{ background:transparent; color:var(--text); border-color:#cfc6b8; }
 .btn.ghost:hover{ background:var(--hover); }
+
+/* Context menu */
+.ctx-menu{
+  position: fixed;
+  z-index: 1000;
+  display: none;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.12);
+  padding: 4px;
+}
+.ctx-menu.open{ display: block; }
+
+.ctx-menu button{
+  width: 100%;
+  display: block;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 10px 12px;
+  font: inherit;
+  color: #463F3F;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ctx-menu button:hover{ background: rgba(0,0,0,.04); }
+
+/* Small "more" trigger (for touch/keyboard) */
+.book-more{
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.04);
+  color: #463F3F;
+  line-height: 28px;
+  text-align: center;
+  cursor: pointer;
+  display: none; /* hide on desktop by default */
+}
+.book-item{ position: relative; }
+@media (hover: none) {
+  .book-more{ display: inline-block; }
+}

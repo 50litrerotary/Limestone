@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, jsonify
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -15,7 +15,8 @@ app.secret_key = "super-secret-key"
 
 # ---- File uploads ----
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_COVER = {"png", "jpg", "jpeg", "webp"}
@@ -23,6 +24,18 @@ ALLOWED_FILE = {"pdf", "epub", "mobi"}
 
 def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
+
+def _delete_static_file(relpath: str):
+    """Delete a file under /static if it exists (ignore errors)."""
+    if not relpath:
+        return
+    # only allow deleting inside /static
+    abs_path = os.path.abspath(os.path.join(STATIC_DIR, relpath))
+    if abs_path.startswith(STATIC_DIR) and os.path.exists(abs_path):
+        try:
+            os.remove(abs_path)
+        except Exception:
+            pass
 
 # --- DB CONFIG ---
 DATABASE_URI = "mysql://limestone_user:StrongLocalPass!23@localhost/limestone"
@@ -57,8 +70,8 @@ class Book(Base):
     author = Column(String(255), nullable=True)
     genre = Column(String(100), nullable=True)
 
-    cover_path = Column(String(500), nullable=True)
-    file_path = Column(String(500), nullable=True)
+    cover_path = Column(String(500), nullable=True)  # e.g. "uploads/.."
+    file_path = Column(String(500), nullable=True)   # e.g. "uploads/.."
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="books")
@@ -168,7 +181,6 @@ def login():
 def bookshelf():
     db = SessionLocal()
 
-    # dropdown data
     authors = [row[0] for row in db.query(Book.author).distinct().all() if row[0]]
     genres  = [row[0] for row in db.query(Book.genre).distinct().all() if row[0]]
     tags    = [row[0] for row in db.query(Tag.name).distinct().all()]
@@ -176,25 +188,20 @@ def bookshelf():
     selected_author = request.args.get('author', '')
     selected_genre  = request.args.get('genre', '')
 
-    # base query + optional filters
-    q = db.query(Book)
+    q = db.query(Book).filter(Book.owner_id == get_current_user_id())
     if selected_author:
         q = q.filter(Book.author == selected_author)
     if selected_genre:
         q = q.filter(Book.genre == selected_genre)
 
     books_raw = q.order_by(Book.created_at.desc()).all()
-    book_count = db.query(Book).count()
+    book_count = db.query(Book).filter(Book.owner_id == get_current_user_id()).count()
 
-    # build lightweight dicts for the template
     books = []
     for b in books_raw:
-        # cover URL: if not provided, use standard placeholder in /static/img/
         cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
-
-        # reading progress (total pages optional if you ever add it later)
         current = b.progress.current_page if b.progress else None
-        total   = getattr(b, 'total_pages', None)  # will be None unless you add this column
+        total   = getattr(b, 'total_pages', None)
 
         meta_bits = []
         if b.genre:
@@ -209,7 +216,7 @@ def bookshelf():
             "author": b.author or "",
             "cover_url": cover_url,
             "progress_current": current,
-            "progress_total": total,  # may be None
+            "progress_total": total,
             "meta_line": meta_line
         })
 
@@ -268,7 +275,7 @@ def logout():
     flash("Logged out successfully.", "success")
     return redirect(url_for('login'))
 
-# ---- Add Book (GET form in modal, POST to create) ----
+# ---- Add Book ----
 @app.route('/books/new', methods=['POST'])
 def add_book():
     uid = get_current_user_id()
@@ -307,12 +314,10 @@ def add_book():
             file_path=file_path
         )
         db.add(book)
-        db.flush()  # get book.id
+        db.flush()
 
-        # Create empty progress row
         db.add(ReadingProgress(book_id=book.id, current_page=0))
 
-        # Tags (comma/space separated)
         if tags_raw:
             for raw in re.split(r"[,\n]", tags_raw):
                 name = raw.strip()
@@ -331,6 +336,31 @@ def add_book():
         db.close()
 
     return redirect(url_for('bookshelf'))
+
+# ---- Delete Book (AJAX) ----
+@app.route('/books/<int:book_id>/delete', methods=['POST'])
+def delete_book(book_id):
+    uid = get_current_user_id()
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            return jsonify({"ok": False, "error": "Not found"}), 404
+
+        # Remove files if they exist
+        _delete_static_file(book.cover_path)
+        _delete_static_file(book.file_path)
+
+        db.delete(book)  # cascades to progress/notes/tags link table
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback()
+        print("Delete book error:", e)
+        return jsonify({"ok": False, "error": "Server error"}), 500
+    finally:
+        db.close()
 
 # Optional: serve uploaded files (covers) if needed locally
 @app.route('/uploads/<path:filename>')
