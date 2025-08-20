@@ -8,11 +8,15 @@
 </head>
 <body>
   <div class="container">
+    <!-- Sidebar -->
     <aside class="sidebar">
       <img class="logo" src="{{ url_for('static', filename='img/logo_2.png') }}" alt="Limestone" />
+
       <div class="book-count">{{ book_count or 0 }} Books In Use</div>
 
+      <!-- Filters -->
       <div class="filters">
+
         <!-- Author -->
         <div class="filter-block">
           <div class="filter-row">
@@ -66,9 +70,11 @@
           </ul>
           <input type="hidden" id="tagValue" name="tag" value="">
         </div>
+
       </div>
     </aside>
 
+    <!-- Main content -->
     <main class="main-content">
       <div class="top-buttons">
         <a href="{{ url_for('login') }}" title="Logout" class="icon-btn">
@@ -82,22 +88,25 @@
         </button>
       </div>
 
-      <!-- Books grid -->
       <div class="book-grid">
         {% if books %}
           {% for b in books %}
-            <article class="book-item" data-book-id="{{ b.id }}"
-                     data-title="{{ b.title|e }}" data-author="{{ b.author|e }}"
-                     data-genre="{{ (b.meta_line.split(',')[0] if b.meta_line else '')|e }}"
-                     data-tags="{% if b.meta_line %}{{ b.meta_line|e }}{% endif %}">
+            <article class="book-item">
               <div class="book-cover">
+                <!-- Format badge (derived) -->
+                <span class="badge-format {{ 'digital' if b.is_digital else 'physical' }}">
+                  {{ 'Digital' if b.is_digital else 'Physical' }}
+                </span>
+
                 <img src="{{ b.cover_url }}" alt="{{ b.title }} cover">
+
                 {% if b.progress_current is not none %}
                   <span class="progress-tag">
                     {{ b.progress_current }}{% if b.progress_total %}/{{ b.progress_total }}{% endif %}
                   </span>
                 {% endif %}
               </div>
+
               <div class="book-info">
                 <div class="title">{{ b.title }}</div>
                 {% if b.author %}<div class="author">{{ b.author }}</div>{% endif %}
@@ -110,18 +119,10 @@
         {% endif %}
       </div>
 
-      <!-- Context menu (left/right click on book) -->
-      <div id="bookMenu" class="context-menu" style="display:none;position:absolute;">
-        <button type="button" data-action="edit">Edit book</button>
-        <button type="button" data-action="remove">Remove book</button>
-      </div>
-
-      <!-- Hidden delete form -->
-      <form id="deleteForm" method="POST" style="display:none;"></form>
     </main>
   </div>
 
-  <!-- Add/Edit Book Modal -->
+  <!-- Add Book Modal -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
       <div class="modal-header">
@@ -129,54 +130,55 @@
         <button id="closeAddModal" class="close-btn" aria-label="Close">×</button>
       </div>
 
-      <form id="addBookForm" class="modal-body" method="POST" enctype="multipart/form-data" action="{{ url_for('add_book') }}">
-        <input type="hidden" name="mode" id="formMode" value="add">
-        <input type="hidden" name="book_id" id="formBookId" value="">
+      <form id="addBookForm" class="modal-body" action="{{ url_for('add_book') }}" method="post" enctype="multipart/form-data">
         <div class="field">
           <label>Title</label>
-          <input id="fTitle" type="text" name="title" placeholder="Book title" required>
+          <input type="text" name="title" placeholder="Book title" required>
         </div>
 
         <div class="two-col">
           <div class="field">
             <label>Author</label>
-            <input id="fAuthor" type="text" name="author" placeholder="Author">
+            <input type="text" name="author" placeholder="Author">
           </div>
           <div class="field">
             <label>Genre</label>
-            <input id="fGenre" type="text" name="genre" placeholder="Genre">
+            <input type="text" name="genre" placeholder="Genre">
           </div>
         </div>
 
         <div class="two-col">
           <div class="field">
             <label>Cover image</label>
-            <input id="fCover" type="file" name="cover" accept="image/*">
+            <input type="file" name="cover" accept="image/*">
           </div>
-          <div class="field" id="fileField">
-            <label>Book file (PDF/EPUB)</label>
-            <input id="fFile" type="file" name="file" accept=".pdf,.epub,.mobi">
+          <div class="field">
+            <label>Book file (PDF/EPUB/MOBI) <small style="opacity:.75">(optional)</small></label>
+            <input type="file" name="file" accept=".pdf,.epub,.mobi">
+            <small class="hint-line">If you add a file, the book will be marked <b>Digital</b>. If you leave this empty, it will be <b>Physical</b>.</small>
           </div>
         </div>
 
         <div class="field">
           <label>Tags (comma separated)</label>
-          <input id="fTags" type="text" name="tags" placeholder="school, science">
+          <input type="text" name="tags" placeholder="school, science">
         </div>
 
         <div class="modal-actions">
           <button type="button" class="btn ghost" id="cancelAdd">Cancel</button>
-          <button type="submit" class="btn primary" id="submitBtn">Add</button>
+          <button type="submit" class="btn primary">Add</button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- JS: dropdowns + modal open/close -->
   <script>
     (function () {
-      // --- Filters dropdowns (unchanged) ---
+      // dropdowns
       const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
       const menus  = Array.from(document.querySelectorAll('.menu'));
+
       function closeAll(exceptId) {
         document.querySelectorAll('.chev').forEach(a => {
           if (a.getAttribute('aria-controls') !== exceptId) a.setAttribute('aria-expanded', 'false');
@@ -215,149 +217,23 @@
       document.addEventListener('click', (e) => { if (!e.target.closest('.filter-block')) closeAll(''); });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(''); });
 
-      // --- Modal controls (Add/Edit) ---
+      // modal
       const modal = document.getElementById('addModal');
       const openBtn = document.getElementById('openAddModal');
       const closeBtn = document.getElementById('closeAddModal');
       const cancelBtn = document.getElementById('cancelAdd');
-      const form = document.getElementById('addBookForm');
-      const formMode = document.getElementById('formMode');
-      const formBookId = document.getElementById('formBookId');
-      const fileField = document.getElementById('fileField');
-
-      const fTitle = document.getElementById('fTitle');
-      const fAuthor = document.getElementById('fAuthor');
-      const fGenre = document.getElementById('fGenre');
-      const fTags = document.getElementById('fTags');
-      const fCover = document.getElementById('fCover');
-      const submitBtn = document.getElementById('submitBtn');
-
       function openModal() { modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false'); }
       function closeModal() { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); }
-
-      // Pure "Add" mode
-      openBtn.addEventListener('click', () => {
-        formMode.value = 'add';
-        formBookId.value = '';
-        document.getElementById('addModalTitle').textContent = 'Add a Book';
-        submitBtn.textContent = 'Add';
-        fileField.style.display = '';           // file allowed when adding
-        form.action = "{{ url_for('add_book') }}";
-        fTitle.value = '';
-        fAuthor.value = '';
-        fGenre.value = '';
-        fTags.value = '';
-        fCover.value = '';
-        openModal();
-      });
-
+      openBtn.addEventListener('click', openModal);
       closeBtn.addEventListener('click', closeModal);
       cancelBtn.addEventListener('click', closeModal);
       modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-      // --- Context menu (left/right click) ---
-      const bookMenu = document.getElementById('bookMenu');
-      let activeBookId = null;
-
-      function showMenu(x, y, bookId) {
-        activeBookId = bookId;
-        bookMenu.style.left = x + 'px';
-        bookMenu.style.top = y + 'px';
-        bookMenu.style.display = 'block';
-      }
-      function hideMenu() {
-        bookMenu.style.display = 'none';
-        activeBookId = null;
-      }
-
-      document.querySelectorAll('.book-item').forEach(item => {
-        const id = item.getAttribute('data-book-id');
-
-        // LEFT click opens menu
-        item.addEventListener('click', (e) => {
-          e.preventDefault();
-          const rect = item.getBoundingClientRect();
-          showMenu(rect.left + window.scrollX + 12, rect.top + window.scrollY + 12, id);
-        });
-
-        // RIGHT click also opens menu
-        item.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          showMenu(e.pageX, e.pageY, id);
-        });
-      });
-
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('#bookMenu')) hideMenu();
-      });
-      window.addEventListener('scroll', hideMenu);
-      window.addEventListener('resize', hideMenu);
-      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') hideMenu(); });
-
-      // Menu actions
-      bookMenu.addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-action]');
-        if (!btn || !activeBookId) return;
-        const action = btn.getAttribute('data-action');
-
-        if (action === 'remove') {
-          const formDel = document.getElementById('deleteForm');
-          formDel.action = `/books/${activeBookId}/delete`;
-          formDel.method = 'POST';
-          formDel.submit();
-        }
-
-        if (action === 'edit') {
-          // Pull current fields from DOM
-          const card = document.querySelector(`.book-item[data-book-id="${activeBookId}"]`);
-          const title = card.querySelector('.title')?.textContent.trim() || '';
-          const author = card.querySelector('.author')?.textContent.trim() || '';
-          const meta = card.querySelector('.meta')?.textContent.trim() || '';
-
-          formMode.value = 'edit';
-          formBookId.value = activeBookId;
-          document.getElementById('addModalTitle').textContent = 'Edit book';
-          submitBtn.textContent = 'Save changes';
-          fileField.style.display = 'none';       // NO file change on edit
-          form.action = `/books/${activeBookId}/edit`;
-
-          fTitle.value = title;
-          fAuthor.value = author;
-          fGenre.value = '';                      // keep simple; you can parse meta if you want
-          fTags.value = meta;
-          fCover.value = '';                      // optional new cover
-
-          openModal();
-          hideMenu();
-        }
+      // when posting to backend now, let the form actually submit
+      document.getElementById('addBookForm').addEventListener('submit', () => {
+        // no preventDefault: real submit to /books/new
       });
     })();
   </script>
-
-  <style>
-    /* tiny default styles for the context menu so it looks neat */
-    .context-menu{
-      background: #fff;
-      border: 1px solid rgba(0,0,0,.12);
-      border-radius: 8px;
-      padding: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.12);
-      z-index: 100;
-    }
-    .context-menu button{
-      display:block;
-      width: 180px;
-      text-align:left;
-      padding:8px 10px;
-      border:0;
-      background:transparent;
-      font: inherit;
-      cursor:pointer;
-      border-radius:6px;
-    }
-    .context-menu button:hover{
-      background: rgba(0,0,0,.06);
-    }
-  </style>
 </body>
 </html>
