@@ -31,6 +31,8 @@
             {% else %}
               <li class="menu-empty">No authors yet</li>
             {% endif %}
+            <!-- Reset option -->
+            <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
           <input type="hidden" id="authorValue" name="author" value="{{ selected_author or '' }}">
         </div>
@@ -49,6 +51,8 @@
             {% else %}
               <li class="menu-empty">No genres yet</li>
             {% endif %}
+            <!-- Reset option -->
+            <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
           <input type="hidden" id="genreValue" name="genre" value="{{ selected_genre or '' }}">
         </div>
@@ -67,6 +71,8 @@
             {% else %}
               <li class="menu-empty">No tags yet</li>
             {% endif %}
+            <!-- Reset option -->
+            <li role="option"><button type="button" data-value="">None</button></li>
           </ul>
           <input type="hidden" id="tagValue" name="tag" value="">
         </div>
@@ -88,12 +94,22 @@
         </button>
       </div>
 
+      <!-- Books grid -->
       <div class="book-grid">
         {% if books %}
           {% for b in books %}
-            <article class="book-item">
+            <article
+              class="book-item"
+              data-book-id="{{ b.id }}"
+              data-title="{{ b.title|e }}"
+              data-author="{{ b.author or '' }}"
+              data-genre="{{ b.genre or '' }}"
+              data-tags="{% if b.tags %}{{ b.tags|join(', ')|e }}{% else %}{% endif %}"
+              data-is-digital="{{ 'true' if b.is_digital else 'false' }}"
+              tabindex="0"
+            >
               <div class="book-cover">
-                <!-- Format badge (derived) -->
+                <!-- Format badge -->
                 <span class="badge-format {{ 'digital' if b.is_digital else 'physical' }}">
                   {{ 'Digital' if b.is_digital else 'Physical' }}
                 </span>
@@ -119,10 +135,20 @@
         {% endif %}
       </div>
 
+      <!-- Context menu (left-click or right-click) -->
+      <div id="bookCtxMenu" class="ctx-menu" role="menu" aria-hidden="true">
+        <button type="button" data-action="edit">Edit book</button>
+        <button type="button" data-action="remove">Remove book</button>
+        <hr style="border:none;height:1px;background:rgba(0,0,0,.06);margin:4px 0;">
+        <button type="button" data-action="close">Cancel</button>
+      </div>
+
+      <!-- Hidden form for POST actions -->
+      <form id="hiddenPostForm" method="post" style="display:none"></form>
     </main>
   </div>
 
-  <!-- Add Book Modal -->
+  <!-- Add/Edit Book Modal -->
   <div id="addModal" class="modal" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="addModalTitle">
       <div class="modal-header">
@@ -148,11 +174,11 @@
         </div>
 
         <div class="two-col">
-          <div class="field">
+          <div class="field" id="coverFieldWrap">
             <label>Cover image</label>
             <input type="file" name="cover" accept="image/*">
           </div>
-          <div class="field">
+          <div class="field" id="fileFieldWrap">
             <label>Book file (PDF/EPUB/MOBI) <small style="opacity:.75">(optional)</small></label>
             <input type="file" name="file" accept=".pdf,.epub,.mobi">
             <small class="hint-line">If you add a file, the book will be marked <b>Digital</b>. If you leave this empty, it will be <b>Physical</b>.</small>
@@ -166,16 +192,18 @@
 
         <div class="modal-actions">
           <button type="button" class="btn ghost" id="cancelAdd">Cancel</button>
-          <button type="submit" class="btn primary">Add</button>
+          <button type="submit" class="btn primary" id="submitBtn">Add</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- JS: dropdowns + modal open/close -->
+  <!-- JS: dropdowns + modal + context menu -->
   <script>
     (function () {
-      // dropdowns
+      /* ----------------------------
+         Dropdowns (Author/Genre/Tag)
+      -----------------------------*/
       const triggers = Array.from(document.querySelectorAll('.chev, .filter-title'));
       const menus  = Array.from(document.querySelectorAll('.menu'));
 
@@ -185,54 +213,175 @@
         });
         menus.forEach(m => { if (m.id !== exceptId) m.classList.remove('open'); });
       }
+
       triggers.forEach(el => {
         el.addEventListener('click', () => {
           const id = el.getAttribute('aria-controls') || el.dataset.controls;
           const menu = document.getElementById(id);
           if (!menu) return;
+
           const arrow = document.querySelector(`.chev[aria-controls="${id}"]`);
           const willOpen = !(arrow && arrow.getAttribute('aria-expanded') === 'true');
+
           closeAll(id);
           if (arrow) arrow.setAttribute('aria-expanded', String(willOpen));
           menu.classList.toggle('open', willOpen);
           if (willOpen) menu.focus();
         });
       });
+
       menus.forEach(menu => {
         menu.addEventListener('click', (e) => {
           const b = e.target.closest('button[data-value]');
           if (!b) return;
+
           const val = b.getAttribute('data-value') || '';
           const name = menu.dataset.name;
           const hidden = document.getElementById(name + 'Value');
           if (hidden) hidden.value = val;
+
           const arrow = document.querySelector(`.chev[aria-controls="${menu.id}"]`);
           if (arrow) arrow.setAttribute('aria-expanded', 'false');
           menu.classList.remove('open');
+
           const params = new URLSearchParams(window.location.search);
-          params.set(name, val);
+          if (val) { params.set(name, val); } else { params.delete(name); }
           window.location.search = params.toString();
         });
       });
-      document.addEventListener('click', (e) => { if (!e.target.closest('.filter-block')) closeAll(''); });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.filter-block')) closeAll('');
+      });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(''); });
 
-      // modal
+      /* --------------
+         Add/Edit Modal
+      ---------------*/
       const modal = document.getElementById('addModal');
       const openBtn = document.getElementById('openAddModal');
       const closeBtn = document.getElementById('closeAddModal');
       const cancelBtn = document.getElementById('cancelAdd');
-      function openModal() { modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false'); }
-      function closeModal() { modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true'); }
-      openBtn.addEventListener('click', openModal);
+      const form = document.getElementById('addBookForm');
+      const fileWrap = document.getElementById('fileFieldWrap');
+      const fileInput = form.querySelector('input[name="file"]');
+      const coverInput = form.querySelector('input[name="cover"]');
+      const titleEl = form.querySelector('input[name="title"]');
+      const authorEl = form.querySelector('input[name="author"]');
+      const genreEl = form.querySelector('input[name="genre"]');
+      const tagsEl = form.querySelector('input[name="tags"]');
+      const submitBtn = document.getElementById('submitBtn');
+      const modalTitle = document.getElementById('addModalTitle');
+
+      function openModal() {
+        modal.classList.add('show'); modal.setAttribute('aria-hidden', 'false');
+      }
+      function closeModal() {
+        modal.classList.remove('show'); modal.setAttribute('aria-hidden', 'true');
+      }
+      function enterAddMode() {
+        modalTitle.textContent = 'Add a Book';
+        submitBtn.textContent = 'Add';
+        form.action = "{{ url_for('add_book') }}";
+        fileWrap.style.display = '';
+        fileInput.disabled = false;
+        // clear fields
+        titleEl.value = '';
+        authorEl.value = '';
+        genreEl.value = '';
+        tagsEl.value = '';
+        coverInput.value = '';
+        fileInput.value = '';
+      }
+      function enterEditMode(book) {
+        modalTitle.textContent = 'Edit Book';
+        submitBtn.textContent = 'Save';
+        form.action = `/books/${book.dataset.bookId}/edit`;
+        // hide and disable file field (file remains as-is)
+        fileWrap.style.display = 'none';
+        fileInput.disabled = true;
+        // prefill
+        titleEl.value = book.dataset.title || '';
+        authorEl.value = book.dataset.author || '';
+        genreEl.value = book.dataset.genre || '';
+        tagsEl.value = (book.dataset.tags || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .join(', ');
+        coverInput.value = '';
+      }
+
+      openBtn.addEventListener('click', () => { enterAddMode(); openModal(); });
       closeBtn.addEventListener('click', closeModal);
       cancelBtn.addEventListener('click', closeModal);
       modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+      form.addEventListener('submit', () => { /* real submit */ });
 
-      // when posting to backend now, let the form actually submit
-      document.getElementById('addBookForm').addEventListener('submit', () => {
-        // no preventDefault: real submit to /books/new
+      /* -------------------------
+         Book context menu
+         (left-click & right-click)
+      --------------------------*/
+      const ctx = document.getElementById('bookCtxMenu');
+      let ctxTarget = null;
+
+      function openCtxAt(x, y) {
+        ctx.style.left = x + 'px';
+        ctx.style.top = y + 'px';
+        ctx.classList.add('open');
+        ctx.setAttribute('aria-hidden', 'false');
+      }
+      function closeCtx() {
+        ctx.classList.remove('open');
+        ctx.setAttribute('aria-hidden', 'true');
+        ctxTarget = null;
+      }
+
+      document.querySelectorAll('.book-item').forEach(item => {
+        item.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          ctxTarget = e.currentTarget;
+          openCtxAt(e.clientX, e.clientY);
+        });
+        item.addEventListener('click', (e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          ctxTarget = e.currentTarget;
+          const x = e.clientX || (rect.left + rect.width / 2);
+          const y = e.clientY || (rect.top + 32);
+          openCtxAt(x, y);
+        });
       });
+
+      ctx.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        if (!ctxTarget) { closeCtx(); return; }
+
+        const id = ctxTarget.dataset.bookId;
+
+        if (action === 'edit') {
+          enterEditMode(ctxTarget);
+          closeCtx();
+          openModal();
+        } else if (action === 'remove') {
+          closeCtx();
+          if (confirm('Remove this book from your shelf?')) {
+            const f = document.getElementById('hiddenPostForm');
+            f.action = `/books/${id}/delete`;
+            f.method = 'post';
+            f.submit();
+          }
+        } else {
+          closeCtx();
+        }
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.book-item') && !e.target.closest('.ctx-menu')) closeCtx();
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeCtx(); });
+      window.addEventListener('scroll', closeCtx, { passive: true });
     })();
   </script>
 </body>

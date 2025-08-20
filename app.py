@@ -1,10 +1,9 @@
+# app.py
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
-)
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_session
 from datetime import datetime
 import os
@@ -24,7 +23,22 @@ ALLOWED_FILE = {"pdf", "epub", "mobi"}
 def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
+def _save_to_uploads(file_storage, prefix: str, uid: int) -> str:
+    """Save and return just the filename (not a path)."""
+    ts = int(datetime.utcnow().timestamp())
+    fname = f"{uid}_{ts}_{prefix}_{secure_filename(file_storage.filename)}"
+    file_storage.save(os.path.join(UPLOAD_DIR, fname))
+    return fname  # store only the bare filename
+
+def _public_upload_url(path_or_name: str | None) -> str | None:
+    """Return a usable URL for an uploaded file name or legacy 'uploads/...' path."""
+    if not path_or_name:
+        return None
+    name = os.path.basename(path_or_name)
+    return url_for('uploaded_file', filename=name)
+
 # --- DB CONFIG ---
+# Tip: if you use PyMySQL, change to "mysql+pymysql://..."
 DATABASE_URI = "mysql://limestone_user:StrongLocalPass!23@localhost/limestone"
 engine = create_engine(DATABASE_URI, pool_pre_ping=True, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
@@ -55,10 +69,10 @@ class Book(Base):
 
     title = Column(String(255), nullable=False)
     author = Column(String(255), nullable=True)
-    genre = Column(String(100), nullable=True)
+    genre  = Column(String(100), nullable=True)
 
-    cover_path = Column(String(500), nullable=True)
-    file_path = Column(String(500), nullable=True)
+    cover_path = Column(String(500), nullable=True)  # stores filename only (new), but legacy values okay
+    file_path  = Column(String(500), nullable=True)  # stores filename only (new)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     owner = relationship("User", back_populates="books")
@@ -119,7 +133,7 @@ EMAIL_REGEX = re.compile(
 )
 
 def get_current_user_id():
-    # TODO: replace with Flask-Login; for now assume demo user id = 1
+    # TODO replace with Flask-Login; demo user:
     return 1
 
 def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
@@ -146,121 +160,47 @@ def login():
     if request.method == 'POST':
         typed_email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
-
         if not EMAIL_REGEX.match(typed_email):
             flash("Please enter a valid email address (e.g., name@example.com).", "error")
             return render_template('login.html', email=typed_email)
-
         db = SessionLocal()
         user = db.query(User).filter_by(email=typed_email).first()
         ok = bool(user and check_password_hash(user.password_hash, password))
         db.close()
-
         if ok:
             return redirect(url_for('bookshelf'), code=302)
-
         flash("Invalid email or password", "error")
         return render_template('login.html', email=typed_email)
-
     return render_template('login.html')
-
-@app.route('/bookshelf')
-def bookshelf():
-    db = SessionLocal()
-
-    # dropdown data
-    authors = [row[0] for row in db.query(Book.author).distinct().all() if row[0]]
-    genres  = [row[0] for row in db.query(Book.genre).distinct().all() if row[0]]
-    tags    = [row[0] for row in db.query(Tag.name).distinct().all()]
-
-    selected_author = request.args.get('author', '')
-    selected_genre  = request.args.get('genre', '')
-
-    # base query + optional filters
-    q = db.query(Book)
-    if selected_author:
-        q = q.filter(Book.author == selected_author)
-    if selected_genre:
-        q = q.filter(Book.genre == selected_genre)
-
-    books_raw = q.order_by(Book.created_at.desc()).all()
-    book_count = db.query(Book).count()
-
-    # build lightweight dicts for the template
-    books = []
-    for b in books_raw:
-        cover_url = b.cover_path or url_for('static', filename='img/cover_placeholder.png')
-        is_digital = bool(b.file_path)
-
-        current = b.progress.current_page if b.progress else None
-        total   = getattr(b, 'total_pages', None)
-
-        meta_bits = []
-        if b.genre:
-            meta_bits.append(b.genre)
-        if b.tags:
-            meta_bits.extend(t.name for t in b.tags)
-        meta_line = ", ".join(meta_bits)
-
-        books.append({
-            "id": b.id,
-            "title": b.title,
-            "author": b.author or "",
-            "cover_url": cover_url,
-            "is_digital": is_digital,        # <-- derived format
-            "progress_current": current,
-            "progress_total": total,
-            "meta_line": meta_line
-        })
-
-    db.close()
-
-    return render_template(
-        'bookshelf.html',
-        authors=authors,
-        genres=genres,
-        tags=tags,
-        selected_author=selected_author,
-        selected_genre=selected_genre,
-        book_count=book_count,
-        books=books
-    )
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     email = ""
     email_error = ""
     password_error = ""
-
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
         password = request.form.get('password', '')
         has_errors = False
-
         if not EMAIL_REGEX.match(email):
             email_error = "Please enter a valid email address (e.g., name@example.com)."
             has_errors = True
         if len(password) < 8:
             password_error = "Password must be at least 8 characters long."
             has_errors = True
-
         db = SessionLocal()
         if not has_errors and db.query(User).filter_by(email=email).first():
             email_error = "Email already registered."
             has_errors = True
-
         if has_errors:
             db.close()
             return render_template('register.html', email=email, email_error=email_error, password_error=password_error)
-
         hashed_pw = generate_password_hash(password)
         db.add(User(email=email, password_hash=hashed_pw))
         db.commit()
         db.close()
-
         flash("Registration successful! Please log in.", "success")
         return redirect(url_for('login'))
-
     return render_template('register.html', email=email)
 
 @app.route('/logout')
@@ -268,13 +208,77 @@ def logout():
     flash("Logged out successfully.", "success")
     return redirect(url_for('login'))
 
-# ---- Add Book (POST) ----
+@app.route('/bookshelf')
+def bookshelf():
+    uid = get_current_user_id()
+    db = SessionLocal()
+
+    # dropdown data limited to current user
+    authors = [row[0] for row in db.query(Book.author).filter(Book.owner_id == uid, Book.author.isnot(None)).distinct().all()]
+    genres  = [row[0] for row in db.query(Book.genre ).filter(Book.owner_id == uid, Book.genre .isnot(None)).distinct().all()]
+    tags    = [row[0] for row in db.query(Tag.name).filter(Tag.owner_id == uid).distinct().all()]
+
+    # filters
+    selected_author = request.args.get('author', '').strip()
+    selected_genre  = request.args.get('genre', '').strip()
+    selected_tag    = request.args.get('tag', '').strip()
+
+    q = db.query(Book).filter(Book.owner_id == uid)
+    if selected_author:
+        q = q.filter(Book.author == selected_author)
+    if selected_genre:
+        q = q.filter(Book.genre == selected_genre)
+    if selected_tag:
+        q = q.join(Book.tags).filter(Tag.name == selected_tag)
+
+    books_raw = q.order_by(Book.created_at.desc()).all()
+    book_count = db.query(Book).filter(Book.owner_id == uid).count()
+
+    # --------- FIXED bad indentation here ----------
+    books = []
+    for b in books_raw:
+        # cover URL (placeholder if none). Works for legacy 'uploads/...' values too.
+        cover_url = _public_upload_url(b.cover_path) or url_for('static', filename='img/cover_placeholder.png')
+
+        current = b.progress.current_page if b.progress else None
+        total   = getattr(b, 'total_pages', None)
+
+        tag_names = [t.name for t in b.tags] if b.tags else []
+        meta_bits = []
+        if b.genre:
+            meta_bits.append(b.genre)
+        if tag_names:
+            meta_bits.extend(tag_names)
+        meta_line = ", ".join(meta_bits)
+
+        books.append({
+            "id": b.id,
+            "title": b.title,
+            "author": b.author or "",
+            "genre": b.genre or "",
+            "tags": tag_names,
+            "cover_url": cover_url,
+            "progress_current": current,
+            "progress_total": total,
+            "meta_line": meta_line,
+            "is_digital": bool(b.file_path),
+        })
+
+    db.close()
+    return render_template(
+        'bookshelf.html',
+        authors=authors, genres=genres, tags=tags,
+        selected_author=selected_author, selected_genre=selected_genre, selected_tag=selected_tag,
+        book_count=book_count, books=books
+    )
+
+# ---- Add Book ----
 @app.route('/books/new', methods=['POST'])
 def add_book():
     uid = get_current_user_id()
     title = (request.form.get('title') or "").strip()
     author = (request.form.get('author') or "").strip()
-    genre = (request.form.get('genre') or "").strip()
+    genre  = (request.form.get('genre')  or "").strip()
     tags_raw = (request.form.get('tags') or "").strip()
 
     if not title:
@@ -286,15 +290,11 @@ def add_book():
 
     cover = request.files.get('cover')
     if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
-        fname = f"{uid}_{int(datetime.utcnow().timestamp())}_cover_{secure_filename(cover.filename)}"
-        cover.save(os.path.join(UPLOAD_DIR, fname))
-        cover_path = f"uploads/{fname}"
+        cover_path = _save_to_uploads(cover, "cover", uid)  # store filename only
 
     doc = request.files.get('file')
     if doc and doc.filename and _ext_ok(doc.filename, ALLOWED_FILE):
-        fname = f"{uid}_{int(datetime.utcnow().timestamp())}_file_{secure_filename(doc.filename)}"
-        doc.save(os.path.join(UPLOAD_DIR, fname))
-        file_path = f"uploads/{fname}"
+        file_path = _save_to_uploads(doc, "file", uid)      # store filename only
 
     db = SessionLocal()
     try:
@@ -307,12 +307,9 @@ def add_book():
             file_path=file_path
         )
         db.add(book)
-        db.flush()  # get book.id
-
-        # Create empty progress row
+        db.flush()
         db.add(ReadingProgress(book_id=book.id, current_page=0))
 
-        # Tags (comma/line separated)
         if tags_raw:
             for raw in re.split(r"[,\n]", tags_raw):
                 name = raw.strip()
@@ -322,7 +319,6 @@ def add_book():
                 book.tags.append(tag)
 
         db.commit()
-        # Format is auto: file_path => Digital, else Physical
         flash("Book added to your shelf!", "success")
     except Exception as e:
         db.rollback()
@@ -333,7 +329,76 @@ def add_book():
 
     return redirect(url_for('bookshelf'))
 
-# Optional: serve uploaded files (covers) if needed locally
+# ---- Edit Book (metadata + optional cover; file is NOT changed) ----
+@app.route('/books/<int:book_id>/edit', methods=['POST'])
+def edit_book(book_id):
+    uid = get_current_user_id()
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            flash("Book not found.", "error")
+            return redirect(url_for('bookshelf'))
+
+        title   = (request.form.get('title')  or "").strip()
+        author  = (request.form.get('author') or "").strip()
+        genre   = (request.form.get('genre')  or "").strip()
+        tags_raw = (request.form.get('tags')  or "").strip()
+
+        if title:
+            book.title = title
+        book.author = author or None
+        book.genre  = genre or None
+
+        cover = request.files.get('cover')
+        if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
+            book.cover_path = _save_to_uploads(cover, "cover", uid)
+
+        # Replace tags set
+        book.tags.clear()
+        if tags_raw:
+            for raw in re.split(r"[,\n]", tags_raw):
+                name = raw.strip()
+                if not name:
+                    continue
+                tag = get_or_create_tag(db, uid, name)
+                book.tags.append(tag)
+
+        db.commit()
+        flash("Book updated.", "success")
+    except Exception as e:
+        db.rollback()
+        flash("Could not update book.", "error")
+        print("Edit book error:", e)
+    finally:
+        db.close()
+
+    return redirect(url_for('bookshelf'))
+
+# ---- Delete Book ----
+@app.route('/books/<int:book_id>/delete', methods=['POST'])
+def delete_book(book_id):
+    uid = get_current_user_id()
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            flash("Book not found.", "error")
+            return redirect(url_for('bookshelf'))
+        db.delete(book)
+        db.commit()
+        flash("Book removed.", "success")
+    except Exception as e:
+        db.rollback()
+        flash("Could not remove book.", "error")
+        print("Delete book error:", e)
+    finally:
+        db.close()
+    return redirect(url_for('bookshelf'))
+
+# Serve uploaded files (covers/files)
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_DIR, filename)
