@@ -1,9 +1,8 @@
-/* ===== Limestone Reading (spec-aligned) ===== */
 :root{
-  --ai: #B5B1AB;       /* left pane */
-  --notes: #F5F2E9;    /* right pane */
+  --ai: #B5B1AB;
+  --notes: #F5F2E9;
   --notes-text:#123E2A;
-  --topbar:#716868;    /* middle-only header */
+  --topbar:#716868;
   --page:#D9D6CD;
   --scroll:#9A9792;
   --text:#463F3F;
@@ -17,102 +16,107 @@
 html,body{ height:100%; }
 body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); background:var(--page); }
 
-/* Exit matches bookshelf icon size (50x50) */
+/* Exit (50x50), no shadow */
 .exit-btn-fixed{
   position:fixed; z-index:1001; top:8px; left:8px;
-  width:50px; height:50px;
-  display:inline-flex; align-items:center; justify-content:center;
-  border-radius:50%; background:rgba(0,0,0,.08);
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);
+  width:50px; height:50px; display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%; background:transparent; box-shadow:none;
 }
 .exit-btn-fixed img{ width:100%; height:100%; object-fit:contain; }
 
-/* Full-screen frame: 3 columns, 2 rows (header + content) */
+/* Frame: 3 cols, short top bar */
 .reader-shell{
   min-height:100vh;
   display:grid;
-  grid-template-columns: 1fr 2fr 1fr; /* 1/4 | 2/4 | 1/4 */
-  grid-template-rows: 54px 1fr;
+  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-rows: 46px 1fr; /* shorter top bar */
 }
-
-/* Middle-only header bar; flush to top, no title */
 .topbar{
   grid-column:2; grid-row:1;
-  height:54px; background:var(--topbar); color:#fff;
+  height:46px; background:var(--topbar); color:#fff;
   display:grid; grid-template-columns: 1fr minmax(720px, 1000px) 1fr; align-items:center;
 }
 .topbar .bar-inner{ grid-column:2; height:100%; }
 
-/* Make children place themselves on the main grid */
 .layout{ display:contents; }
 
-/* Left pane: solid color, end-to-end */
+/* Ask AI pane */
 .askai{
   grid-column:1; grid-row:1 / span 2;
-  background:var(--ai); padding:12px; display:flex; flex-direction:column; min-height:0;
+  background:var(--ai);
+  padding:12px; display:flex; flex-direction:column; min-height:0; position:relative;
 }
-
-/* AI response output — pushed down so it clears the exit button */
-.ai-out {
-  flex: 1;
-  background: transparent;
-  margin-top: 50px;          /* shift the whole response block down */
-  padding: 0 12px 12px 14px; /* normal side/bottom padding */
-  border: 0;
-  white-space: pre-wrap;
-  overflow: auto;
+/* response stays transparent; starts below exit */
+.ai-out{
+  flex:1; background:transparent; margin-top:50px; padding:0 12px 12px 14px; border:0; white-space:pre-wrap; overflow:auto;
 }
-
-/* Compact Ask input (180x33), boxy edges, D9D6CD bg with icon inside */
-.ai-form{ margin-top:10px; }
-.ai-input{ position:relative; width:180px; height:33px; }
+/* locked input at bottom-left */
+.ai-form{ position:absolute; left:16px; bottom:16px; margin:0; }
+.ai-input{ position:relative; width:300px; height:36px; }
 .ai-input input{
   position:absolute; inset:0;
-  width:100%; height:100%;
-  background:#D9D6CD; border:1px solid rgba(0,0,0,.15);
-  border-radius:3px; padding:6px 36px 6px 10px; outline:none;
-  color:#0F3524; /* placeholder + text tone */
+  background:#D9D6CD; border:1px solid #cfc6b8; border-radius:0;
+  padding:6px 44px 6px 12px;
+  font-family:"Tinos","Times New Roman",serif; font-size:20px; color:#0F3524;
 }
-.ai-input input::placeholder{ color:#0F3524; opacity:.85; }
+.ai-input input::placeholder{ font-family:"Tinos","Times New Roman",serif; font-size:20px; color:#0F3524; opacity:.5; }
 .ai-input .icon-btn{
-  position:absolute; right:6px; top:50%; transform:translateY(-50%);
-  width:22px; height:22px; border:0; background:transparent; padding:0; cursor:pointer;
-  display:inline-flex; align-items:center; justify-content:center;
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  width:28px; height:28px; border:0; background:transparent; padding:0; display:inline-flex; align-items:center; justify-content:center; cursor:pointer;
 }
-.ai-input .icon-btn img{ width:22px; height:22px; display:block; }
+.ai-input .icon-btn img{ width:100%; height:100%; display:block; }
 
-/* Middle reader column */
-.book-area{
-  grid-column:2; grid-row:2;
-  display:flex; flex-direction:column; min-width:0; background:transparent;
-}
-.pdf-scroll{ flex:1; min-height:60vh; max-height:calc(100vh - 54px - 90px); overflow:auto; padding:12px 0; }
+/* Middle reader */
+.book-area{ grid-column:2; grid-row:2; display:flex; flex-direction:column; min-width:0; background:transparent; }
+.pdf-scroll{ flex:1; min-height:60vh; max-height:calc(100vh - 46px - 58px); overflow:auto; padding:12px 0; }
 .pdf-pages{ width:100%; }
 .pdf-scroll::-webkit-scrollbar{ width:10px; }
 .pdf-scroll::-webkit-scrollbar-thumb{ background:var(--scroll); border-radius:6px; }
 
-/* Progress */
-.progress-bar{ margin:10px auto 0; display:flex; gap:10px; align-items:center; justify-content:center; }
-.progress-bar input{ width:90px; padding:6px 8px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
-.btn-save{ padding:8px 12px; border-radius:8px; border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer; }
+/* Slim footer controls (~60% of old) */
+.progress-bar{
+  margin:10px auto 0; display:flex; gap:6px; align-items:center; justify-content:center; padding:4px 8px; font-size:13px;
+}
+.progress-bar input[type="number"]{ height:28px; width:72px; padding:4px 6px; font-size:14px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
+.btn-save{ padding:6px 10px; font-size:13px; border-radius:8px; border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer; }
 
-/* Right pane: solid color, end-to-end */
+/* Notes pane */
 .notes{
   grid-column:3; grid-row:1 / span 2;
   background:var(--notes); color:var(--notes-text);
-  padding:10px; display:flex; flex-direction:column; min-width:0;
+  padding:0; display:flex; flex-direction:column; overflow:hidden;
 }
 .notes.expanded{ grid-column:2 / span 2; grid-row:1 / span 2; }
 
-.notes-head{ font-weight:700; margin-bottom:8px; }
-.note-form{ display:flex; flex-direction:column; gap:8px; }
-.note-form .row{ display:flex; gap:8px; }
-.note-form input, .note-form textarea{
-  width:100%; padding:8px 10px; border:1px solid #d0c8bc; border-radius:6px; background:#fff; outline:none; color:var(--notes-text);
+/* centered page number at top */
+.notes-page-num{
+  text-align:center; font-family:"Tinos","Times New Roman",serif; font-size:18px; line-height:1; color:#9A9792;
+  padding:10px 0 6px; position:sticky; top:0; background:var(--notes); z-index:1;
 }
-.note-form .actions{ display:flex; justify-content:flex-end; }
-.btn.primary{ background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:8px; padding:8px 12px; cursor:pointer; }
-.note-list{ margin-top:8px; overflow:auto; flex:1; display:flex; flex-direction:column; gap:8px; }
+
+/* editor */
+.note-form{ padding:18px 20px 14px; display:flex; flex-direction:column; gap:12px; }
+.note-form .row{ display:flex; gap:8px; }
+
+.note-title{
+  border:0; outline:none; background:transparent;
+  font-family:"Tinos","Times New Roman",serif; font-weight:700; font-size:44px; line-height:1.1; color:#0F3524; padding:4px 0 2px;
+}
+.note-title::placeholder{ color:#0F3524; opacity:1; }
+
+.note-page{
+  width:90px; border:0; outline:none; background:transparent;
+  font-family:"Tinos","Times New Roman",serif; font-size:18px; color:var(--notes-text); border-bottom:1px dashed rgba(0,0,0,.15);
+}
+
+.note-text{
+  border:0; outline:none; resize:vertical; min-height:calc(100vh - 220px);
+  background:transparent; font-family:"Tinos","Times New Roman",serif; font-size:20px; line-height:1.6; color:var(--notes-text); padding:0; white-space:pre-wrap;
+}
+.note-text::placeholder{ color:var(--notes-text); opacity:1; }
+
+/* list of saved notes */
+.note-list{ padding:10px 20px 16px; overflow:auto; }
 .note{ background:#fff; border:1px solid #e3dccf; border-radius:8px; padding:10px; color:#2b3a31; }
 .note header{ display:flex; align-items:center; gap:8px; }
 .note .ttl{ font-weight:700; }
@@ -121,208 +125,12 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 .note .txt{ margin-top:6px; white-space:pre-wrap; }
 .note .ts{ margin-top:6px; font-size:12px; color:#7a7a7a; }
 
-/* Page HUD */
+/* floating HUD for PDF */
 .page-hud{
   position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
   padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.6); color:#fff;
   font-family:"Times New Roman", Tinos, serif; font-size:14px; line-height:1; z-index:1000; pointer-events:none;
 }
 
-/* ===== OVERRIDES: per request ===== */
-
-/* Ask AI box — Tinos, larger field, D9D6CD, bigger icon; keep structure */
-.ai-form{
-  max-width: 420px;           /* a little wider */
-}
-.ai-form input{
-  font-family: "Tinos","Times New Roman",serif;
-  height: 44px;               /* a little taller */
-  font-size: 20px;            /* larger text to match box */
-  background: #D9D6CD;        /* box colour */
-  border: 1px solid #cfc6b8;
-  border-radius: 4px;         /* boxy edges */
-}
-.ai-form input::placeholder{
-  font-family: "Tinos","Times New Roman",serif;
-  font-size: 20px;
-  color: #0F3524;             /* placeholder colour */
-  opacity: .9;
-}
-.ai-form .icon-btn{
-  width: 32px;                /* larger search button */
-  height: 32px;
-}
-.ai-form .icon-btn img{ width:100%; height:100%; }
-
-/* Button menu (top bar) — slightly shorter */
-.reader-shell{ grid-template-rows: 46px 1fr; } /* was 54px */
-.topbar{ height: 46px; }                       /* was 54px */
-
-/* Reading footer (page numbers) — a bit more than half size */
-.progress-bar{
-  padding: 4px 8px;           /* smaller overall height */
-  gap: 6px;
-  font-size: 13px;
-}
-.progress-bar label{ display:flex; align-items:center; gap:6px; }
-.progress-bar input[type="number"]{
-  height: 28px;
-  width: 72px;
-  padding: 4px 6px;
-  font-size: 14px;
-}
-.btn-save{
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
-/* Keep reader height correct with new sizes */
-.pdf-scroll{
-  max-height: calc(100vh - 46px - 58px); /* topbar + smaller footer */
-}
-
-/* Exit button — remove shadow/background only */
-.exit-btn-fixed{
-  background: transparent !important;
-  box-shadow: none !important;
-}
-/* ---- Ask AI: lock to bottom-left, align icon, Tinos placeholder at 50% ---- */
-.askai{ position: relative; }
-.ai-form{
-  position: absolute;
-  left: 16px;
-  bottom: 16px;
-  margin: 0;
-}
-.ai-input{
-  position: relative;
-  width: 300px;       /* a bit wider */
-  height: 36px;       /* a bit shorter than before */
-}
-.ai-input input{
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
-  background: #D9D6CD;
-  border: 1px solid #cfc6b8;
-  border-radius: 0;                  /* square edges */
-  padding: 6px 44px 6px 12px;        /* room for the icon on the right */
-  font-family: "Tinos","Times New Roman",serif;
-  font-size: 20px;
-  color: #0F3524;
-}
-.ai-input input::placeholder{
-  font-family: "Tinos","Times New Roman",serif;
-  font-size: 20px;
-  color: #0F3524;
-  opacity: .5;                       /* 50% opacity as requested */
-}
-
-/* Search icon: larger, perfectly centered inside the field, right-aligned */
-.ai-input .icon-btn{
-  position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 28px;
-  height: 28px;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.ai-input .icon-btn img{ width: 100%; height: 100%; display: block; }
-
-/* Keep the response space above; transparent but takes room */
-.ai-out{
-  flex: 1;
-  background: transparent;
-  padding: 0;
-  border: 0;
-  white-space: pre-wrap;
-  overflow: auto;
-}
-
-/* Top menu */
-.top-menu {
-  position: absolute;
-  top: 15px;
-  left: 20px;
-  height: 38px; /* slightly shorter */
-  display: flex;
-  gap: 10px;
-}
-
-.exit-btn {
-  width: 33px;
-  height: 33px;
-  border: none;
-  background: #463F3F;
-  color: white;
-  cursor: pointer;
-  box-shadow: none; /* remove shadow */
-}
-
-.menu-btn {
-  width: 33px;
-  height: 33px;
-  border: none;
-  background: #716868;
-  color: white;
-  cursor: pointer;
-}
-
-/* Ask AI section */
-.ask-ai-section {
-  position: absolute;
-  bottom: 75px; /* moved slightly up from footer */
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  background: #D9D6CD;
-  width: 260px;   /* wider */
-  height: 46px;   /* taller but shorter than before */
-  border: none;
-}
-
-.ask-ai-input {
-  flex: 1;
-  font-family: 'Tinos', serif;
-  font-size: 18px;  /* larger */
-  color: rgba(70, 63, 63, 0.5); /* 50% opacity */
-  border: none;
-  background: transparent;
-  padding-left: 10px;
-}
-
-.ask-ai-btn {
-  width: 32px;   /* bigger */
-  height: 32px;  /* bigger */
-  margin-right: 8px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-.ask-ai-btn img {
-  width: 100%;
-  height: 100%;
-}
-
-/* Footer */
-.footer {
-  position: absolute;
-  bottom: 10px;
-  width: 100%;
-  text-align: center;
-  font-family: 'Tinos', serif;
-  font-size: 14px;
-  color: #716868;
-  height: 22px;  /* smaller, ~60% of original */
-}
-
-/* Hide leftover heading if present */
+/* hide any leftover Ask-AI heading */
 .askai-head{ display:none !important; }

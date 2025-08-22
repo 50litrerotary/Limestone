@@ -8,7 +8,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
-  <!-- Fixed exit (same size as bookshelf icons) -->
+  <!-- Fixed exit (same size as bookshelf icons, no shadow) -->
   <a class="exit-btn-fixed" href="{{ url_for('bookshelf') }}" title="Back to shelf">
     <img src="{{ url_for('static', filename='img/exit.png') }}" alt="Exit">
   </a>
@@ -18,22 +18,21 @@
     <header class="topbar"><div class="bar-inner"></div></header>
 
     <div class="layout">
-      <!-- Left quarter: solid AI pane -->
-<!-- Ask AI (replace this whole <aside> block) -->
-<!-- Ask AI (clean: no duplicate heading) -->
-<aside class="askai">
-  <!-- invisible response area keeps the top space reserved -->
-  <pre id="aiOut" class="ai-out"></pre>
+      <!-- Ask AI (left quarter) -->
+      <aside class="askai">
+        <!-- response area stays transparent; pushed down so it never hides under exit -->
+        <pre id="aiOut" class="ai-out"></pre>
 
-  <form id="aiForm" class="ai-form">
-    <div class="ai-input">
-      <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
-      <button type="submit" class="icon-btn" title="Ask">
-        <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
-      </button>
-    </div>
-  </form>
-</aside>
+        <!-- locked input at bottom-left -->
+        <form id="aiForm" class="ai-form">
+          <div class="ai-input">
+            <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
+            <button type="submit" class="icon-btn" title="Ask">
+              <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
+            </button>
+          </div>
+        </form>
+      </aside>
 
       {% if file_url %}
       <!-- Middle half: digital reader -->
@@ -43,7 +42,7 @@
         </div>
         <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
           <label>
-            Page&nbsp;
+            Page
             <input id="pageInput" type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
             {% if total_pages %}/ {{ total_pages }}{% endif %}
           </label>
@@ -57,38 +56,43 @@
           <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
           <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
           <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-            <label>Page&nbsp;<input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
+            <label>Page <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
             <button class="btn-save" type="submit">Save</button>
           </form>
         </div>
       </main>
       {% endif %}
 
-      <!-- Right quarter: solid notes pane -->
+      <!-- Notes (right quarter) -->
       <aside class="notes{% if not file_url %} expanded{% endif %}">
-        <div class="notes-head">Notes</div>
-        <form class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
+        <div class="notes-page-num" id="notesPageLabel">
+          Page {{ current_page or 0 }}
+        </div>
+
+        <form id="noteForm" class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
           <div class="row">
-            <input type="text" name="title" placeholder="Title">
-            <input type="number" name="page" min="0" placeholder="Page #" value="{{ current_page or 0 }}">
+            <input class="note-title" type="text" name="title" placeholder="Title">
+            <input class="note-page"  type="number" name="page" min="0" placeholder="Page #" value="{{ current_page or 0 }}">
           </div>
-          <textarea name="text" rows="5" placeholder="Enter text from here."></textarea>
-          <div class="actions"><button class="btn primary" type="submit">Add note</button></div>
+          <textarea class="note-text" name="text" rows="6" placeholder="Enter text from here."></textarea>
+          <!-- no Add button; autosaves on scroll -->
         </form>
 
-        <div class="note-list">
+        <div id="noteList" class="note-list">
           {% for n in book.notes|sort(attribute='created_at', reverse=True) %}
             <article class="note">
               <header>
                 <div class="ttl">{{ n.title or 'Untitled' }}</div>
                 {% if n.page is not none %}<div class="pg">p. {{ n.page }}</div>{% endif %}
-                <form method="post" action="{{ url_for('delete_note', note_id=n.id) }}"><button class="link danger" type="submit">Delete</button></form>
+                <form method="post" action="{{ url_for('delete_note', note_id=n.id) }}">
+                  <button class="link danger" type="submit">Delete</button>
+                </form>
               </header>
               {% if n.text %}<div class="txt">{{ n.text }}</div>{% endif %}
               <footer class="ts">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</footer>
             </article>
           {% else %}
-            <p class="empty">No notes yet.</p>
+            <p class="empty" id="notesEmpty">No notes yet.</p>
           {% endfor %}
         </div>
       </aside>
@@ -98,7 +102,7 @@
   <div id="pageHud" class="page-hud">– / –</div>
 
   <script>
-    // Ask AI stub (keeps UI responsive now)
+    // Ask AI
     (function(){
       const f = document.getElementById('aiForm');
       const out = document.getElementById('aiOut');
@@ -116,6 +120,7 @@
     })();
 
     {% if file_url %}
+    // PDF.js viewer + progress autosave
     (function(){
       const pdfjsLib = window['pdfjs-dist/build/pdf'];
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -220,6 +225,61 @@
       });
     })();
     {% endif %}
+
+    // Notes: autosave on scroll; transparent fields; live page label + count
+    (function(){
+      const form   = document.getElementById('noteForm');
+      if (!form) return;
+
+      const list   = document.getElementById('noteList');
+      const empty  = document.getElementById('notesEmpty');
+      const pageIn = form.querySelector('.note-page');
+      const title  = form.querySelector('.note-title');
+      const body   = form.querySelector('.note-text');
+      const label  = document.getElementById('notesPageLabel');
+
+      let lastSent = '';
+      let saving   = false;
+
+      function updateLabel(){
+        if (label && pageIn) label.textContent = 'Page ' + (pageIn.value || '0');
+      }
+      pageIn && pageIn.addEventListener('input', updateLabel);
+      updateLabel();
+
+      function updateCount(){
+        const count = list ? list.querySelectorAll('.note').length : 0;
+        if (empty){
+          if (count > 0) { empty.style.display='none'; }
+          else { empty.style.display=''; empty.textContent='No notes yet.'; }
+        }
+      }
+      updateCount();
+
+      function contentKey(){
+        return [pageIn?.value||'', title?.value||'', body?.value||''].join('\n---\n');
+      }
+
+      async function autosave(){
+        const key = contentKey().trim();
+        if (!key || key === lastSent) return;
+        if (saving) return;
+        saving = true;
+        try{
+          const fd = new FormData(form);
+          await fetch(form.action, { method:'POST', body: fd });
+          lastSent = key;
+        }catch(_){/* silent */}
+        saving = false;
+      }
+
+      const onScrollSave = (e)=>{
+        // Only react to scrolls occurring inside the Notes pane
+        const pane = e.target.closest && e.target.closest('.notes');
+        if (pane) autosave();
+      };
+      document.addEventListener('scroll', onScrollSave, { passive:true, capture:true });
+    })();
   </script>
 </body>
 </html>
