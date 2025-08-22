@@ -7,6 +7,10 @@
   --scroll:#9A9792;
   --text:#463F3F;
   --accent:#00361D;
+
+  /* NEW: ink colors */
+  --ink-highlighter: rgba(15,53,36,.40); /* #0F3524 at 40% */
+  --ink-pen: #123E2A;                    /* thin drawer pen */
 }
 
 /* Base */
@@ -38,6 +42,7 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 }
 .topbar .bar-inner{ grid-column:2; height:100%; }
 
+/* Keep children on main grid */
 .layout{ display:contents; }
 
 /* Ask AI pane */
@@ -124,3 +129,95 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 
 /* hide any leftover Ask-AI heading */
 .askai-head{ display:none !important; }
+
+/* ------------------------------------------------------------------------- */
+/* TOOLBAR (adds only; keeps your existing sizing & layout)                  */
+/* ------------------------------------------------------------------------- */
+
+/* Place tools in the center lane; row already 46px high */
+.topbar .bar-inner{
+  display:flex; align-items:center; gap:10px; justify-content:flex-start;
+}
+
+/* Single, conflict-free definition for the circular tokens */
+.tool-btn{
+  width:50px; height:50px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%;
+  background:#BEB8B2;                 /* token face to match mock */
+  border:2px solid #463F3F;            /* dark ring */
+  box-shadow:0 2px 6px rgba(0,0,0,.35);
+  padding:6px; cursor:pointer; user-select:none;
+}
+.tool-btn img, .tool-btn svg{ width:100%; height:100%; display:block; }
+.tool-btn:active{ transform:translateY(1px); }
+.tool-btn.active{ outline:3px solid rgba(0,54,29,.35); outline-offset:2px; }
+
+/* Cursors when tools are active */
+.pdf-scroll.textbox-mode,
+.pdf-scroll.highlight-mode,
+.pdf-scroll.draw-mode{ cursor:crosshair; }
+
+/* ------------------------------------------------------------------------- */
+/* PAGE OVERLAYS (adds only)                                                 */
+/* ------------------------------------------------------------------------- */
+
+/* Each rendered PDF page becomes the positioning context for overlays */
+.pdf-page{ position:relative; }
+
+/* Overlay container for drawings/text boxes */
+.pdf-page .overlay-layer{ position:absolute; inset:0; pointer-events:none; }
+.pdf-page .draw-canvas{ position:absolute; inset:0; pointer-events:auto; }
+
+/* Text boxes placed on PDF pages (unchanged look; kept from your file) */
+.pdf-page .textbox{
+  position:absolute;
+  background:#fffbe6;
+  border:1px solid rgba(0,0,0,.25);
+  border-radius:4px;
+  padding:6px 8px;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
+  font-family:"Tinos","Times New Roman",serif;
+  font-size:16px; line-height:1.35; color:#463F3F;
+  min-width:120px; min-height:48px; outline:none;
+}
+
+/* Optional: visual hint colors for highlighter/drawer previews */
+.ink-preview.highlighter{ background: var(--ink-highlighter); }
+.ink-preview.drawer{ border-color: var(--ink-pen); }
+
+/* --- Topbar tools (smaller, aligned) --- */
+.topbar .bar-inner {
+  display: flex;
+  align-items: center;   /* vertical centering */
+  gap: 6px;
+  height: 100%;
+  justify-content: flex-start;
+  padding-left: 4px;     /* small left buffer */
+}
+
+.tool-btn {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #BEB8B2;
+  border: 2px solid #463F3F;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  padding: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-btn img {
+  width: 110%;   /* fill more of the circle */
+  height: 110%;
+  object-fit: contain;
+  display: block;
+}
+
+.tool-btn.active {
+  outline: 3px solid rgba(0,54,29,.35);
+}

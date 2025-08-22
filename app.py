@@ -589,3 +589,276 @@ def ask_ai():
 if __name__ == '__main__':
     server = Server(app.wsgi_app)
     server.serve(port=5001, debug=True)
+
+# --- Inline text boxes (per-page) -------------------------------------------
+
+def get_or_create_page_note(db, owner_id: int, book_id: int, page: int) -> Note:
+    note = (
+        db.query(Note)
+        .filter_by(owner_id=owner_id, book_id=book_id, page=page, title="Inline boxes")
+        .first()
+    )
+    if note:
+        return note
+    note = Note(owner_id=owner_id, book_id=book_id, page=page, title="Inline boxes", text=None)
+    db.add(note)
+    db.flush()
+    return note
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['GET'])
+def api_list_boxes(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    db = SessionLocal()
+    try:
+        # only annotations whose note belongs to this user/book/page
+        rows = (
+            db.query(Annotation)
+            .join(Note, Annotation.note_id == Note.id)
+            .filter(
+                Note.owner_id == uid,
+                Note.book_id == book_id,
+                Note.page == page
+            )
+            .all()
+        )
+        items = []
+        for a in rows:
+            # style keeps width/height percentages as "w=..;h=.."
+            w = h = None
+            if a.style:
+                for part in a.style.split(';'):
+                    k, _, v = part.partition('=')
+                    if k.strip() == 'w':
+                        w = float(v or 0)
+                    if k.strip() == 'h':
+                        h = float(v or 0)
+            items.append({
+                "id": a.id,
+                "x": a.pos_x, "y": a.pos_y,  # 0..1 normalized
+                "w": w or 0.25, "h": h or 0.12,
+                "text": a.text or ""
+            })
+        return jsonify({"ok": True, "boxes": items})
+    except Exception as e:
+        print("List boxes error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['POST'])
+def api_add_box(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    x = float(data.get("x") or 0)   # normalized 0..1
+    y = float(data.get("y") or 0)
+    w = float(data.get("w") or 0.25)
+    h = float(data.get("h") or 0.12)
+    text = (data.get("text") or "").strip()
+
+    db = SessionLocal()
+    try:
+        # ensure the user actually owns the book
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            return jsonify({"ok": False, "error": "not_found"}), 404
+
+        page_note = get_or_create_page_note(db, uid, book_id, page)
+        a = Annotation(
+            note_id=page_note.id,
+            start=0, end=0, enabled=True,
+            pos_x=x, pos_y=y,
+            text=text or "",
+            style=f"w={w};h={h}"
+        )
+        db.add(a)
+        db.commit()
+        return jsonify({"ok": True, "id": a.id})
+    except Exception as e:
+        db.rollback()
+        print("Add box error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+# ---- Inline text boxes (per-page) -------------------------------------------
+
+def get_or_create_page_note(db, owner_id: int, book_id: int, page: int, title="Inline boxes") -> Note:
+    note = (
+        db.query(Note)
+        .filter_by(owner_id=owner_id, book_id=book_id, page=page, title=title)
+        .first()
+    )
+    if note:
+        return note
+    note = Note(owner_id=owner_id, book_id=book_id, page=page, title=title, text=None)
+    db.add(note)
+    db.flush()
+    return note
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['GET'])
+def api_list_boxes(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Annotation)
+            .join(Note, Annotation.note_id == Note.id)
+            .filter(Note.owner_id == uid, Note.book_id == book_id, Note.page == page,
+                    (Annotation.style.like('w=%;h=%') | Annotation.style.like('%type=box%')))
+            .all()
+        )
+        items = []
+        for a in rows:
+            w = h = None
+            if a.style:
+                for part in a.style.split(';'):
+                    k, _, v = part.partition('=')
+                    if k.strip() == 'w': w = float(v or 0)
+                    if k.strip() == 'h': h = float(v or 0)
+            items.append({"id": a.id, "x": a.pos_x, "y": a.pos_y, "w": w or 0.25, "h": h or 0.12, "text": a.text or ""})
+        return jsonify({"ok": True, "boxes": items})
+    finally:
+        db.close()
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['POST'])
+def api_add_box(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    x = float(data.get("x") or 0)
+    y = float(data.get("y") or 0)
+    w = float(data.get("w") or 0.25)
+    h = float(data.get("h") or 0.12)
+    text = (data.get("text") or "").strip()
+
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            return jsonify({"ok": False, "error": "not_found"}), 404
+
+        page_note = get_or_create_page_note(db, uid, book_id, page, title="Inline boxes")
+        a = Annotation(
+            note_id=page_note.id, start=0, end=0, enabled=True,
+            pos_x=x, pos_y=y, text=text, style=f"type=box;w={w};h={h}"
+        )
+        db.add(a); db.commit()
+        return jsonify({"ok": True, "id": a.id})
+    except Exception as e:
+        db.rollback(); print("Add box error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes/<int:ann_id>', methods=['PUT'])
+def api_update_box(book_id, page, ann_id):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    x = data.get("x"); y = data.get("y"); w = data.get("w"); h = data.get("h")
+
+    db = SessionLocal()
+    try:
+        a = (
+            db.query(Annotation)
+            .join(Note, Annotation.note_id == Note.id)
+            .filter(Annotation.id == ann_id, Note.owner_id == uid, Note.book_id == book_id, Note.page == page)
+            .first()
+        )
+        if not a:
+            db.close()
+            return jsonify({"ok": False, "error": "not_found"}), 404
+        a.text = text
+        if x is not None: a.pos_x = float(x)
+        if y is not None: a.pos_y = float(y)
+        # rebuild style if w/h provided
+        if w is not None or h is not None:
+            parts = {"type":"box","w":None,"h":None}
+            if a.style:
+                for part in a.style.split(';'):
+                    k, _, v = part.partition('=')
+                    if k in parts: parts[k] = v
+            if w is not None: parts["w"] = str(float(w))
+            if h is not None: parts["h"] = str(float(h))
+            a.style = f"type=box;w={parts['w'] or 0.25};h={parts['h'] or 0.12}"
+        db.commit()
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.rollback(); print("Update box error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+# ---- Freehand strokes (highlighter + thin pen) ------------------------------
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/strokes', methods=['GET'])
+def api_list_strokes(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(Annotation)
+            .join(Note, Annotation.note_id == Note.id)
+            .filter(Note.owner_id == uid, Note.book_id == book_id, Note.page == page,
+                    Annotation.style.like('type=stroke%'))
+            .all()
+        )
+        items = []
+        for a in rows:
+            meta = {"tool":"", "width":"", "color":""}
+            for part in (a.style or "").split(';'):
+                k, _, v = part.partition('=')
+                if k in meta: meta[k] = v
+            items.append({
+                "id": a.id,
+                "tool": meta["tool"],
+                "width": float(meta["width"] or 6),
+                "color": meta["color"] or "#0F352466",
+                "points": a.text or "[]",   # JSON stringified list of normalized points
+            })
+        return jsonify({"ok": True, "strokes": items})
+    finally:
+        db.close()
+
+@app.route('/api/books/<int:book_id>/pages/<int:page>/strokes', methods=['POST'])
+def api_add_stroke(book_id, page):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    tool  = (data.get("tool")  or "highlighter").strip()
+    width = float(data.get("width") or 8)
+    color = (data.get("color") or "#0F352466").strip()  # 40% opacity default
+    points_json = data.get("points") or "[]"
+
+    db = SessionLocal()
+    try:
+        # one note to hold all strokes per page
+        stroke_note = get_or_create_page_note(db, uid, book_id, page, title="Canvas strokes")
+        a = Annotation(
+            note_id=stroke_note.id, start=0, end=0, enabled=True,
+            pos_x=None, pos_y=None, text=points_json,
+            style=f"type=stroke;tool={tool};width={width};color={color}"
+        )
+        db.add(a); db.commit()
+        return jsonify({"ok": True, "id": a.id})
+    except Exception as e:
+        db.rollback(); print("Add stroke error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+        

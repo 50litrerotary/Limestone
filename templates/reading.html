@@ -15,7 +15,20 @@
 
   <div class="reader-shell">
     <!-- Top bar only across the middle reader column, no title text -->
-    <header class="topbar"><div class="bar-inner"></div></header>
+<header class="topbar">
+  <div class="bar-inner">
+    <!-- leave implicit space for exit button at far left -->
+    <button id="btnTextBox" class="tool-btn" title="Text box">
+      <img src="{{ url_for('static', filename='img/text_box.png') }}" alt="T">
+    </button>
+    <button id="btnHighlighter" class="tool-btn" title="Highlighter">
+      <img src="{{ url_for('static', filename='img/highlighter.png') }}" alt="Highlighter">
+    </button>
+    <button id="btnDrawer" class="tool-btn" title="Thin pen">
+      <img src="{{ url_for('static', filename='img/drawer.png') }}" alt="Pen">
+    </button>
+  </div>
+</header>
 
     <div class="layout">
       <!-- Ask AI (left quarter) -->
@@ -74,7 +87,7 @@
           <div class="row">
             <input class="note-title" type="text" name="title" placeholder="Title">
             <input class="note-page"  type="number" name="page" min="0" placeholder="Page #"
-                   value="{{ current_page or 0 }}">
+                  value="{{ current_page or 0 }}">
           </div>
           <textarea class="note-text" name="text" rows="6" placeholder="Enter text from here."></textarea>
         </form>
