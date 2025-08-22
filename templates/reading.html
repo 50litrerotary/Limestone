@@ -5,63 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Limestone | Reading</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/reading.css') }}">
-  <style>
-    .page-hud{
-      position: fixed;
-      left: 50%;
-      bottom: 18px;
-      transform: translateX(-50%);
-      padding: 6px 10px;
-      border-radius: 8px;
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      font-family: "Times New Roman", Tinos, serif;
-      font-size: 14px;
-      line-height: 1;
-      z-index: 1000;
-      pointer-events: none;
-    }
-    /* PDF scroll container scrollbar color */
-    .pdf-scroll{
-      scrollbar-width: thin;
-      scrollbar-color: #9A9792 transparent;
-    }
-    .pdf-scroll::-webkit-scrollbar{ width: 10px; }
-    .pdf-scroll::-webkit-scrollbar-thumb{ background: #9A9792; border-radius: 6px; }
-  </style>
-  <!-- pdf.js (cdnjs pinned) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
+  <!-- Always-visible exit at top-left -->
+  <a class="exit-btn-fixed" href="{{ url_for('bookshelf') }}" title="Back to shelf">
+    <img src="{{ url_for('static', filename='img/exit.png') }}" alt="Exit">
+  </a>
+
   <div class="reader-shell">
+    <!-- Header strip only over book (middle) column -->
     <header class="topbar">
-      <a class="exit-btn" href="{{ url_for('bookshelf') }}" title="Back to shelf">
-        <img src="{{ url_for('static', filename='img/exit.png') }}" alt="Exit">
-      </a>
-      <div class="book-title">{{ book.title }}</div>
-      <div class="spacer"></div>
+      <div class="bar-inner">
+        <div class="book-title">{{ book.title }}</div>
+        <div class="spacer"></div>
+      </div>
     </header>
 
     <div class="layout">
-      <!-- Ask AI -->
+      <!-- Ask AI (full left quarter) -->
       <aside class="askai">
         <div class="askai-head">Ask AI…</div>
+        <pre id="aiOut" class="ai-out"></pre>
         <form id="aiForm" class="ai-form">
           <input type="text" name="q" placeholder="Summarise this chapter…" autocomplete="off">
-          <button type="submit" class="icon-btn" title="Search">
-            <img src="{{ url_for('static', filename='img/search.png') }}" alt="Search">
+          <button type="submit" class="icon-btn" title="Ask">
+            <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
           </button>
         </form>
-        <pre id="aiOut" class="ai-out"></pre>
       </aside>
 
       {% if file_url %}
-      <!-- Digital book -->
+      <!-- Digital book (middle half) -->
       <main class="book-area with-file">
         <div id="pdfScroll" class="pdf-scroll">
           <div id="pdfPages" class="pdf-pages"></div>
         </div>
-
         <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
           <label>
             Page&nbsp;
@@ -72,23 +51,20 @@
         </form>
       </main>
       {% else %}
-      <!-- Physical book -->
+      <!-- Physical book (occupies middle; notes expands to right) -->
       <main class="book-area no-file">
         <div class="no-file-msg">
           <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
           <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
           <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-            <label>
-              Page&nbsp;
-              <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
-            </label>
+            <label>Page&nbsp;<input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
             <button class="btn-save" type="submit">Save</button>
           </form>
         </div>
       </main>
       {% endif %}
 
-      <!-- Notes -->
+      <!-- Notes (full right quarter) -->
       <aside class="notes{% if not file_url %} expanded{% endif %}">
         <div class="notes-head">Notes</div>
         <form class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
@@ -97,9 +73,7 @@
             <input type="number" name="page" min="0" placeholder="Page #" value="{{ current_page or 0 }}">
           </div>
           <textarea name="text" rows="5" placeholder="Enter text from here."></textarea>
-          <div class="actions">
-            <button class="btn primary" type="submit">Add note</button>
-          </div>
+          <div class="actions"><button class="btn primary" type="submit">Add note</button></div>
         </form>
 
         <div class="note-list">
@@ -108,13 +82,9 @@
               <header>
                 <div class="ttl">{{ n.title or 'Untitled' }}</div>
                 {% if n.page is not none %}<div class="pg">p. {{ n.page }}</div>{% endif %}
-                <form method="post" action="{{ url_for('delete_note', note_id=n.id) }}">
-                  <button class="link danger" type="submit">Delete</button>
-                </form>
+                <form method="post" action="{{ url_for('delete_note', note_id=n.id) }}"><button class="link danger" type="submit">Delete</button></form>
               </header>
-              {% if n.text %}
-                <div class="txt">{{ n.text }}</div>
-              {% endif %}
+              {% if n.text %}<div class="txt">{{ n.text }}</div>{% endif %}
               <footer class="ts">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</footer>
             </article>
           {% else %}
@@ -128,7 +98,7 @@
   <div id="pageHud" class="page-hud">– / –</div>
 
   <script>
-    // Ask AI stub unchanged
+    // Ask AI stub
     (function(){
       const f = document.getElementById('aiForm');
       const out = document.getElementById('aiOut');
@@ -137,64 +107,55 @@
         e.preventDefault();
         const fd = new FormData(f);
         out.textContent = 'Thinking…';
-        const res = await fetch('{{ url_for("ask_ai") }}', { method: 'POST', body: fd });
-        const data = await res.json();
-        out.textContent = data.ok ? data.answer : 'Error.';
+        try{
+          const res = await fetch('{{ url_for("ask_ai") }}', { method:'POST', body:fd });
+          const data = await res.json();
+          out.textContent = data.ok ? data.answer : 'Error.';
+        }catch(_){ out.textContent = 'Error.'; }
       });
     })();
 
     {% if file_url %}
     (function(){
       const pdfjsLib = window['pdfjs-dist/build/pdf'];
-      // Use built-in worker from cdn version
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
       const url = "{{ file_url }}";
       const pagesHost = document.getElementById('pdfPages');
-      const scrollEl = document.getElementById('pdfScroll');
-      const hud = document.getElementById('pageHud');
+      const scrollEl  = document.getElementById('pdfScroll');
+      const hud       = document.getElementById('pageHud');
       const pageInput = document.getElementById('pageInput');
 
-      let pdf = null;
-      let total = {{ (total_pages or 'null') }};
-      let current = {{ (current_page or 0) }};
-      let posting = false;
+      let pdf=null;
+      let total={{ (total_pages or 'null') }};
+      let current={{ (current_page or 0) }};
+      let posting=false;
 
-      function hudSet(p, t){
-        hud.textContent = (t ? (p + ' / ' + t) : (String(p) + ' / –'));
-      }
-
-      function debounce(fn, ms){
-        let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
-      }
-
-      async function postProgress(p, t){
-        if (posting) return;
-        posting = true;
+      function hudSet(p,t){ hud.textContent = t ? (p+' / '+t) : (String(p)+' / –'); }
+      function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+      async function postProgress(p,t){
+        if (posting) return; posting=true;
         try{
           await fetch(`/api/books/{{ book.id }}/progress`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({page: p, total: t})
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ page:p, total:t })
           });
-        }catch(_){/* ignore */}
-        posting = false;
+        }catch(_){}
+        posting=false;
       }
       const postDebounced = debounce(postProgress, 350);
 
       function visiblePage(){
         const items = pagesHost.querySelectorAll('.pdf-page');
-        let bestId = 1, bestRatio = -1;
+        let bestId=1,best=-1;
         const vh = scrollEl.getBoundingClientRect();
-        items.forEach(div => {
-          const r = div.getBoundingClientRect();
-          const overlapX = Math.max(0, Math.min(vh.right, r.right) - Math.max(vh.left, r.left));
-          const overlapY = Math.max(0, Math.min(vh.bottom, r.bottom) - Math.max(vh.top, r.top));
-          const area = overlapX * overlapY;
-          const totalArea = r.width * r.height || 1;
-          const ratio = area / totalArea;
-          const id = parseInt(div.dataset.page, 10) || 1;
-          if (ratio > bestRatio){ bestRatio = ratio; bestId = id; }
+        items.forEach(div=>{
+          const r=div.getBoundingClientRect();
+          const ox=Math.max(0, Math.min(vh.right,r.right)-Math.max(vh.left,r.left));
+          const oy=Math.max(0, Math.min(vh.bottom,r.bottom)-Math.max(vh.top,r.top));
+          const area=ox*oy, totalArea=r.width*r.height||1;
+          const ratio=area/totalArea, id=parseInt(div.dataset.page,10)||1;
+          if(ratio>best){ best=ratio; bestId=id; }
         });
         return bestId;
       }
@@ -210,56 +171,52 @@
       }
 
       function pageContainer(num){
-        const wrap = document.createElement('div');
-        wrap.className = 'pdf-page';
-        wrap.dataset.page = String(num);
-        wrap.style.position = 'relative';
-        wrap.style.margin = '12px auto';
-        wrap.style.background = '#fff';
-        wrap.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)';
-        wrap.style.width = 'min(95%, 840px)';
-        wrap.style.borderRadius = '4px';
-        const canvas = document.createElement('canvas');
-        canvas.style.display = 'block';
-        canvas.style.width = '100%';
-        canvas.style.height = 'auto';
+        const wrap=document.createElement('div');
+        wrap.className='pdf-page';
+        wrap.dataset.page=String(num);
+        wrap.style.position='relative';
+        wrap.style.margin='12px auto';
+        wrap.style.background='#fff';
+        wrap.style.boxShadow='0 2px 8px rgba(0,0,0,.12)';
+        wrap.style.width='min(95%, 840px)';
+        wrap.style.borderRadius='4px';
+        const canvas=document.createElement('canvas');
+        canvas.style.display='block';
+        canvas.style.width='100%';
+        canvas.style.height='auto';
         wrap.appendChild(canvas);
-        return {wrap, canvas};
+        return {wrap,canvas};
       }
 
       function renderPage(num){
-        return pdf.getPage(num).then(page => {
-          const {wrap, canvas} = pageContainer(num);
+        return pdf.getPage(num).then(page=>{
+          const {wrap,canvas}=pageContainer(num);
           pagesHost.appendChild(wrap);
-          const viewport = page.getViewport({ scale: 1.5 });
-          const context = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width  = viewport.width;
-          return page.render({canvasContext: context, viewport}).promise;
+          const viewport=page.getViewport({ scale:1.5 });
+          const ctx=canvas.getContext('2d');
+          canvas.height=viewport.height; canvas.width=viewport.width;
+          return page.render({ canvasContext:ctx, viewport }).promise;
         });
       }
 
-      pdfjsLib.getDocument(url).promise.then(async _pdf => {
-        pdf = _pdf;
-        total = pdf.numPages;
-        hudSet(current || 1, total);
-        postDebounced(current || 1, total); // ensure total saved once
+      pdfjsLib.getDocument(url).promise.then(async _pdf=>{
+        pdf=_pdf;
+        total=pdf.numPages;
+        hudSet(current||1,total);
+        postDebounced(current||1,total);
 
-        // render sequentially to keep memory sane
-        for (let i = 1; i <= pdf.numPages; i++){
-          /* eslint-disable no-await-in-loop */
+        for(let i=1;i<=pdf.numPages;i++){ /* eslint-disable-line no-await-in-loop */
           await renderPage(i);
         }
 
-        // scroll to last saved page if any
-        const target = pagesHost.querySelector(`.pdf-page[data-page="${current || 1}"]`);
+        const target = pagesHost.querySelector(`.pdf-page[data-page="${current||1}"]`);
         if (target){
           const top = target.offsetTop - 24;
-          scrollEl.scrollTo({ top, behavior: 'instant' in scrollEl ? 'instant' : 'auto' });
+          scrollEl.scrollTo({ top, behavior:'auto' });
         }
 
-        scrollEl.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', debounce(onScroll, 150));
+        scrollEl.addEventListener('scroll', onScroll, { passive:true });
+        window.addEventListener('resize', debounce(onScroll,150));
       });
     })();
     {% endif %}
