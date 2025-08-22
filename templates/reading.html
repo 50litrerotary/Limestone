@@ -8,35 +8,35 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
-  <!-- Always-visible exit at top-left -->
+  <!-- Fixed exit (same size as bookshelf icons) -->
   <a class="exit-btn-fixed" href="{{ url_for('bookshelf') }}" title="Back to shelf">
     <img src="{{ url_for('static', filename='img/exit.png') }}" alt="Exit">
   </a>
 
   <div class="reader-shell">
-    <!-- Header strip only over book (middle) column -->
-    <header class="topbar">
-      <div class="bar-inner">
-        <div class="book-title">{{ book.title }}</div>
-        <div class="spacer"></div>
-      </div>
-    </header>
+    <!-- Top bar only across the middle reader column, no title text -->
+    <header class="topbar"><div class="bar-inner"></div></header>
 
     <div class="layout">
-      <!-- Ask AI (full left quarter) -->
-      <aside class="askai">
-        <div class="askai-head">Ask AI…</div>
-        <pre id="aiOut" class="ai-out"></pre>
-        <form id="aiForm" class="ai-form">
-          <input type="text" name="q" placeholder="Summarise this chapter…" autocomplete="off">
-          <button type="submit" class="icon-btn" title="Ask">
-            <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
-          </button>
-        </form>
-      </aside>
+      <!-- Left quarter: solid AI pane -->
+<!-- Ask AI (replace this whole <aside> block) -->
+<!-- Ask AI (clean: no duplicate heading) -->
+<aside class="askai">
+  <!-- invisible response area keeps the top space reserved -->
+  <pre id="aiOut" class="ai-out"></pre>
+
+  <form id="aiForm" class="ai-form">
+    <div class="ai-input">
+      <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
+      <button type="submit" class="icon-btn" title="Ask">
+        <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
+      </button>
+    </div>
+  </form>
+</aside>
 
       {% if file_url %}
-      <!-- Digital book (middle half) -->
+      <!-- Middle half: digital reader -->
       <main class="book-area with-file">
         <div id="pdfScroll" class="pdf-scroll">
           <div id="pdfPages" class="pdf-pages"></div>
@@ -51,7 +51,7 @@
         </form>
       </main>
       {% else %}
-      <!-- Physical book (occupies middle; notes expands to right) -->
+      <!-- Middle half: physical book info -->
       <main class="book-area no-file">
         <div class="no-file-msg">
           <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
@@ -64,7 +64,7 @@
       </main>
       {% endif %}
 
-      <!-- Notes (full right quarter) -->
+      <!-- Right quarter: solid notes pane -->
       <aside class="notes{% if not file_url %} expanded{% endif %}">
         <div class="notes-head">Notes</div>
         <form class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
@@ -98,7 +98,7 @@
   <div id="pageHud" class="page-hud">– / –</div>
 
   <script>
-    // Ask AI stub
+    // Ask AI stub (keeps UI responsive now)
     (function(){
       const f = document.getElementById('aiForm');
       const out = document.getElementById('aiOut');
