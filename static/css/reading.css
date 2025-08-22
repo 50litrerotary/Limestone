@@ -1,6 +1,6 @@
 :root{
-  --ai: #B5B1AB;
-  --notes: #F5F2E9;
+  --ai:#B5B1AB;
+  --notes:#F5F2E9;
   --notes-text:#123E2A;
   --topbar:#716868;
   --page:#D9D6CD;
@@ -114,16 +114,6 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
   background:transparent; font-family:"Tinos","Times New Roman",serif; font-size:20px; line-height:1.6; color:var(--notes-text); padding:0; white-space:pre-wrap;
 }
 .note-text::placeholder{ color:var(--notes-text); opacity:1; }
-
-/* list of saved notes */
-.note-list{ padding:10px 20px 16px; overflow:auto; }
-.note{ background:#fff; border:1px solid #e3dccf; border-radius:8px; padding:10px; color:#2b3a31; }
-.note header{ display:flex; align-items:center; gap:8px; }
-.note .ttl{ font-weight:700; }
-.note .pg{ margin-left:auto; font-size:12px; color:#6a7a70; }
-.note .link.danger{ background:transparent; border:0; color:#9b2c2c; cursor:pointer; }
-.note .txt{ margin-top:6px; white-space:pre-wrap; }
-.note .ts{ margin-top:6px; font-size:12px; color:#7a7a7a; }
 
 /* floating HUD for PDF */
 .page-hud{

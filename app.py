@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 from livereload import Server
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, Text, ForeignKey, Table, DateTime, and_
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_session, joinedload
 from datetime import datetime
 import os
@@ -86,10 +86,11 @@ class Note(Base):
     id = Column(Integer, primary_key=True)
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
     book_id = Column(Integer, ForeignKey("books.id", ondelete="CASCADE"), index=True, nullable=False)
-    page = Column(Integer, nullable=True)
+    page = Column(Integer, nullable=True)  # a single note per page
     title = Column(String(255), nullable=True)
     text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
     owner = relationship("User", back_populates="notes")
     book = relationship("Book", back_populates="notes")
 
@@ -125,7 +126,7 @@ def require_login():
         return redirect(url_for("login"))
     return None
 
-def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
+def get_or_create_tag(db, owner_id: int, name: str) -> "Tag":
     tag = db.query(Tag).filter_by(owner_id=owner_id, name=name).first()
     if tag:
         return tag
@@ -135,10 +136,8 @@ def get_or_create_tag(db, owner_id: int, name: str) -> Tag:
     return tag
 
 def _build_file_url(file_path: str):
-    """Return a URL for /uploads/<filename> safely, or None if not available."""
     if not file_path:
         return None
-    # Accept either "uploads/<fname>" or a bare filename. Always send only the filename to route.
     fname = os.path.basename(file_path)
     return url_for('uploaded_file', filename=fname)
 
@@ -150,7 +149,6 @@ def remove_session(exception=None):
 
 @app.route('/')
 def root():
-    # Nice touch: if already logged in, go straight to shelf
     return redirect(url_for('bookshelf') if current_user_id() else url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -215,29 +213,13 @@ def bookshelf():
     uid = current_user_id()
     db = SessionLocal()
 
-    authors = [
-        row[0]
-        for row in db.query(Book.author)
-        .filter(Book.owner_id == uid, Book.author.isnot(None), Book.author != "")
-        .distinct()
-        .all()
-    ]
-    genres = [
-        row[0]
-        for row in db.query(Book.genre)
-        .filter(Book.owner_id == uid, Book.genre.isnot(None), Book.genre != "")
-        .distinct()
-        .all()
-    ]
-    tags = [
-        t[0]
-        for t in db.query(Tag.name)
-        .join(book_tags, Tag.id == book_tags.c.tag_id)
-        .join(Book, Book.id == book_tags.c.book_id)
-        .filter(Tag.owner_id == uid, Book.owner_id == uid)
-        .distinct()
-        .all()
-    ]
+    authors = [row[0] for row in db.query(Book.author).filter(Book.owner_id == uid, Book.author.isnot(None), Book.author != "").distinct().all()]
+    genres  = [row[0] for row in db.query(Book.genre ).filter(Book.owner_id == uid, Book.genre .isnot(None), Book.genre  != "").distinct().all()]
+    tags    = [t[0]   for t in db.query(Tag.name)
+                  .join(book_tags, Tag.id == book_tags.c.tag_id)
+                  .join(Book, Book.id == book_tags.c.book_id)
+                  .filter(Tag.owner_id == uid, Book.owner_id == uid)
+                  .distinct().all()]
 
     selected_author = request.args.get('author', '').strip()
     selected_genre  = request.args.get('genre', '').strip()
@@ -292,7 +274,7 @@ def add_book():
     if (redir := require_login()):
         return redir
     uid = current_user_id()
-    title = (request.form.get('title') or "").strip()
+    title  = (request.form.get('title')  or "").strip()
     author = (request.form.get('author') or "").strip()
     genre  = (request.form.get('genre')  or "").strip()
     tags_raw = (request.form.get('tags') or "").strip()
@@ -319,12 +301,9 @@ def add_book():
     db = SessionLocal()
     try:
         book = Book(
-            owner_id=uid,
-            title=title,
-            author=author or None,
-            genre=genre or None,
-            cover_path=cover_path,
-            file_path=file_path
+            owner_id=uid, title=title,
+            author=author or None, genre=genre or None,
+            cover_path=cover_path, file_path=file_path
         )
         db.add(book)
         db.flush()
@@ -333,8 +312,7 @@ def add_book():
         if tags_raw:
             for raw in re.split(r"[,\n]", tags_raw):
                 name = raw.strip()
-                if not name:
-                    continue
+                if not name: continue
                 tag = get_or_create_tag(db, uid, name)
                 book.tags.append(tag)
 
@@ -344,55 +322,6 @@ def add_book():
         db.rollback()
         flash("Could not save book. Please try again.", "error")
         print("Add book error:", e)
-    finally:
-        db.close()
-
-    return redirect(url_for('bookshelf'))
-
-@app.route('/books/<int:book_id>/edit', methods=['POST'])
-def edit_book(book_id):
-    if (redir := require_login()):
-        return redir
-    uid = current_user_id()
-    db = SessionLocal()
-    try:
-        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
-        if not book:
-            db.close()
-            flash("Book not found.", "error")
-            return redirect(url_for('bookshelf'))
-
-        title   = (request.form.get('title')  or "").strip()
-        author  = (request.form.get('author') or "").strip()
-        genre   = (request.form.get('genre')  or "").strip()
-        tags_raw = (request.form.get('tags')  or "").strip()
-
-        if title:
-            book.title = title
-        book.author = author or None
-        book.genre  = genre or None
-
-        cover = request.files.get('cover')
-        if cover and cover.filename and _ext_ok(cover.filename, ALLOWED_COVER):
-            fname = f"{uid}_{int(datetime.utcnow().timestamp())}_cover_{secure_filename(cover.filename)}"
-            cover.save(os.path.join(UPLOAD_DIR, fname))
-            book.cover_path = f"uploads/{fname}"
-
-        book.tags.clear()
-        if tags_raw:
-            for raw in re.split(r"[,\n]", tags_raw):
-                name = raw.strip()
-                if not name:
-                    continue
-                tag = get_or_create_tag(db, uid, name)
-                book.tags.append(tag)
-
-        db.commit()
-        flash("Book updated.", "success")
-    except Exception as e:
-        db.rollback()
-        flash("Could not update book.", "error")
-        print("Edit book error:", e)
     finally:
         db.close()
 
@@ -412,12 +341,10 @@ def delete_book(book_id):
             return redirect(url_for('bookshelf'))
         db.delete(book)
         db.flush()
-
         # cleanup orphan tags for this user
         for t in db.query(Tag).filter(Tag.owner_id == uid).all():
             if not t.books:
                 db.delete(t)
-
         db.commit()
         flash("Book removed.", "success")
     except Exception as e:
@@ -453,10 +380,10 @@ def read_book(book_id):
 
     prog = book.progress
     current_page = prog.current_page if prog else 0
-    total_pages = prog.total_pages if prog else None
+    total_pages  = prog.total_pages if prog else None
 
     cover_url = book.cover_path or url_for('static', filename='img/cover_placeholder.png')
-    file_url = _build_file_url(book.file_path) if book.file_path else None
+    file_url  = _build_file_url(book.file_path) if book.file_path else None
 
     db.close()
     return render_template(
@@ -468,14 +395,14 @@ def read_book(book_id):
         total_pages=total_pages
     )
 
-# ---- Notes (RESTORED) ----
+# ---- Legacy add_note (kept for form action compatibility; still used by autosave) ----
 @app.route('/books/<int:book_id>/notes', methods=['POST'])
 def add_note(book_id):
     if (redir := require_login()):
         return redir
-    uid = current_user_id()
+    uid   = current_user_id()
     title = (request.form.get('title') or '').strip()
-    text  = (request.form.get('text') or '').strip()
+    text  = (request.form.get('text')  or '').strip()
     page  = request.form.get('page')
     page  = int(page) if (page is not None and str(page).isdigit()) else None
 
@@ -486,14 +413,21 @@ def add_note(book_id):
             db.close()
             flash("Book not found.", "error")
             return redirect(url_for('bookshelf'))
-        n = Note(owner_id=uid, book_id=book.id, page=page, title=title or None, text=text or None)
-        db.add(n)
+
+        # Upsert per-page note (one note per page per book per user)
+        note = db.query(Note).filter(
+            and_(Note.owner_id == uid, Note.book_id == book.id, Note.page == page)
+        ).first()
+        if not note:
+            note = Note(owner_id=uid, book_id=book.id, page=page)
+            db.add(note)
+        note.title = title or None
+        note.text  = text  or None
         db.commit()
-        flash("Note added.", "success")
+        # No flash; this route is often called via JS
     except Exception as e:
         db.rollback()
-        flash("Couldn't add note.", "error")
-        print("Add note error:", e)
+        print("Add/Upsert note error:", e)
     finally:
         db.close()
     return redirect(url_for('read_book', book_id=book_id))
@@ -513,11 +447,9 @@ def delete_note(note_id):
         bid = note.book_id
         db.delete(note)
         db.commit()
-        flash("Note removed.", "success")
         return redirect(url_for('read_book', book_id=bid))
     except Exception as e:
         db.rollback()
-        flash("Couldn't remove note.", "error")
         print("Delete note error:", e)
         return redirect(url_for('bookshelf'))
     finally:
@@ -545,7 +477,6 @@ def update_progress(book_id):
         return redirect(url_for("read_book", book_id=book_id))
     except Exception as e:
         db.rollback()
-        flash("Couldn't update progress.", "error")
         print("Progress error:", e)
         return redirect(url_for("read_book", book_id=book_id))
     finally:
@@ -557,8 +488,8 @@ def api_update_progress(book_id):
     if not current_user_id():
         return jsonify({"ok": False, "error": "auth"}), 401
     uid = current_user_id()
-    data = request.get_json(silent=True) or {}
-    page = int(data.get("page") or 0)
+    data  = request.get_json(silent=True) or {}
+    page  = int(data.get("page") or 0)
     total = data.get("total")
     total = int(total) if (total is not None and str(total).isdigit()) else None
 
@@ -571,7 +502,6 @@ def api_update_progress(book_id):
         if not book.progress:
             book.progress = ReadingProgress(book_id=book.id)
 
-        # clamp
         if total and page > total:
             page = total
         if page < 0:
@@ -585,6 +515,67 @@ def api_update_progress(book_id):
     except Exception as e:
         db.rollback()
         print("API progress error:", e)
+        return jsonify({"ok": False, "error": "server"}), 500
+    finally:
+        db.close()
+
+# ---- Notes API: per-page load & upsert ----
+@app.route('/api/books/<int:book_id>/notes/by_page')
+def api_note_by_page(book_id):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    try:
+        page = int(request.args.get("page", "0"))
+    except ValueError:
+        page = 0
+
+    db = SessionLocal()
+    try:
+        note = db.query(Note).filter(
+            and_(Note.owner_id == uid, Note.book_id == book_id, Note.page == page)
+        ).first()
+        if not note:
+            return jsonify({"ok": True, "note": None})
+        return jsonify({"ok": True, "note": {
+            "id": note.id, "page": note.page, "title": note.title or "", "text": note.text or ""
+        }})
+    finally:
+        db.close()
+
+@app.route('/api/books/<int:book_id>/notes/upsert_by_page', methods=['POST'])
+def api_upsert_note_by_page(book_id):
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    uid = current_user_id()
+    data = request.get_json(silent=True) or {}
+    try:
+        page = int(data.get("page") or 0)
+    except ValueError:
+        page = 0
+    title = (data.get("title") or "").strip()
+    text  = (data.get("text")  or "").strip()
+
+    db = SessionLocal()
+    try:
+        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
+        if not book:
+            db.close()
+            return jsonify({"ok": False, "error": "not_found"}), 404
+
+        note = db.query(Note).filter(
+            and_(Note.owner_id == uid, Note.book_id == book_id, Note.page == page)
+        ).first()
+        if not note:
+            note = Note(owner_id=uid, book_id=book_id, page=page)
+            db.add(note)
+        note.title = title or None
+        note.text  = text  or None
+        db.commit()
+        return jsonify({"ok": True, "id": note.id})
+    except Exception as e:
+        db.rollback()
+        print("Upsert note API error:", e)
         return jsonify({"ok": False, "error": "server"}), 500
     finally:
         db.close()

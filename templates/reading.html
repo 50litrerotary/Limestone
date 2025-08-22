@@ -69,32 +69,17 @@
           Page {{ current_page or 0 }}
         </div>
 
+        <!-- No “Add note” button; we upsert on page switch and manual autosave -->
         <form id="noteForm" class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
           <div class="row">
             <input class="note-title" type="text" name="title" placeholder="Title">
-            <input class="note-page"  type="number" name="page" min="0" placeholder="Page #" value="{{ current_page or 0 }}">
+            <input class="note-page"  type="number" name="page" min="0" placeholder="Page #"
+                   value="{{ current_page or 0 }}">
           </div>
           <textarea class="note-text" name="text" rows="6" placeholder="Enter text from here."></textarea>
-          <!-- no Add button; autosaves on scroll -->
         </form>
 
-        <div id="noteList" class="note-list">
-          {% for n in book.notes|sort(attribute='created_at', reverse=True) %}
-            <article class="note">
-              <header>
-                <div class="ttl">{{ n.title or 'Untitled' }}</div>
-                {% if n.page is not none %}<div class="pg">p. {{ n.page }}</div>{% endif %}
-                <form method="post" action="{{ url_for('delete_note', note_id=n.id) }}">
-                  <button class="link danger" type="submit">Delete</button>
-                </form>
-              </header>
-              {% if n.text %}<div class="txt">{{ n.text }}</div>{% endif %}
-              <footer class="ts">{{ n.created_at.strftime('%Y-%m-%d %H:%M') }}</footer>
-            </article>
-          {% else %}
-            <p class="empty" id="notesEmpty">No notes yet.</p>
-          {% endfor %}
-        </div>
+        <!-- No list — notes are per page and loaded in place -->
       </aside>
     </div>
   </div>
@@ -119,8 +104,11 @@
       });
     })();
 
+    // Helpers shared by PDF + Notes
+    function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+
     {% if file_url %}
-    // PDF.js viewer + progress autosave
+    // PDF.js viewer + progress autosave + note page binding
     (function(){
       const pdfjsLib = window['pdfjs-dist/build/pdf'];
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -131,154 +119,193 @@
       const hud       = document.getElementById('pageHud');
       const pageInput = document.getElementById('pageInput');
 
+      // Notes form refs
+      const noteForm = document.getElementById('noteForm');
+      const noteTitle = noteForm.querySelector('.note-title');
+      const notePage  = noteForm.querySelector('.note-page');
+      const noteText  = noteForm.querySelector('.note-text');
+      const pageLabel = document.getElementById('notesPageLabel');
+
       let pdf=null;
       let total={{ (total_pages or 'null') }};
       let current={{ (current_page or 0) }};
       let posting=false;
 
-      function hudSet(p,t){ hud.textContent = t ? (p+' / '+t) : (String(p)+' / –'); }
-      function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
-      async function postProgress(p,t){
-        if (posting) return; posting=true;
+      let noteDirty = false;
+      let activeNotePage = current || 0;
+
+      function hudSet(p, t){ hud.textContent = t ? (p + ' / ' + t) : (String(p) + ' / –'); }
+      function setLabel(p){ if (pageLabel){ pageLabel.textContent = 'Page ' + p; } }
+      function setNotePage(p){ notePage.value = p; setLabel(p); }
+
+      // ---- NOTES: load & save per page ----
+      async function loadNoteFor(page){
+        try{
+          const q = new URLSearchParams({ page: String(page) });
+          const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());
+          const data = await res.json();
+          if (data.ok){
+            const n = data.note;
+            noteTitle.value = n ? (n.title || '') : '';
+            noteText.value  = n ? (n.text  || '') : '';
+            noteDirty = false;
+            activeNotePage = page;
+            setNotePage(page);
+          }
+        }catch(_){}
+      }
+
+      async function saveNoteFor(page){
+        if (!noteDirty) return;
+        try{
+          const payload = {
+            page: page,
+            title: noteTitle.value || '',
+            text:  noteText.value  || ''
+          };
+          await fetch(`/api/books/{{ book.id }}/notes/upsert_by_page`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
+          });
+          noteDirty = false;
+        }catch(_){}
+      }
+
+      noteTitle.addEventListener('input', ()=>{ noteDirty = true; });
+      noteText .addEventListener('input', ()=>{ noteDirty = true; });
+
+      // ---- PROGRESS: save + drive notes binding ----
+      async function postProgress(p, t){
+        if (posting) return;
+        posting = true;
         try{
           await fetch(`/api/books/{{ book.id }}/progress`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ page:p, total:t })
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({page: p, total: t})
           });
         }catch(_){}
-        posting=false;
+        posting = false;
       }
       const postDebounced = debounce(postProgress, 350);
 
       function visiblePage(){
         const items = pagesHost.querySelectorAll('.pdf-page');
-        let bestId=1,best=-1;
+        let bestId = 1, bestRatio = -1;
         const vh = scrollEl.getBoundingClientRect();
-        items.forEach(div=>{
-          const r=div.getBoundingClientRect();
-          const ox=Math.max(0, Math.min(vh.right,r.right)-Math.max(vh.left,r.left));
-          const oy=Math.max(0, Math.min(vh.bottom,r.bottom)-Math.max(vh.top,r.top));
-          const area=ox*oy, totalArea=r.width*r.height||1;
-          const ratio=area/totalArea, id=parseInt(div.dataset.page,10)||1;
-          if(ratio>best){ best=ratio; bestId=id; }
+        items.forEach(div => {
+          const r = div.getBoundingClientRect();
+          const overlapX = Math.max(0, Math.min(vh.right, r.right) - Math.max(vh.left, r.left));
+          const overlapY = Math.max(0, Math.min(vh.bottom, r.bottom) - Math.max(vh.top, r.top));
+          const area = overlapX * overlapY;
+          const totalArea = r.width * r.height || 1;
+          const ratio = area / totalArea;
+          const id = parseInt(div.dataset.page, 10) || 1;
+          if (ratio > bestRatio){ bestRatio = ratio; bestId = id; }
         });
         return bestId;
       }
 
-      function onScroll(){
+      async function onScroll(){
         const p = visiblePage();
         if (p !== current){
+          // save note for previous page (if dirty) BEFORE switching
+          await saveNoteFor(activeNotePage);
           current = p;
           hudSet(current, total);
           if (pageInput) pageInput.value = current;
           postDebounced(current, total);
+          // load note for the new page
+          await loadNoteFor(current);
         }
       }
 
       function pageContainer(num){
-        const wrap=document.createElement('div');
-        wrap.className='pdf-page';
-        wrap.dataset.page=String(num);
-        wrap.style.position='relative';
-        wrap.style.margin='12px auto';
-        wrap.style.background='#fff';
-        wrap.style.boxShadow='0 2px 8px rgba(0,0,0,.12)';
-        wrap.style.width='min(95%, 840px)';
-        wrap.style.borderRadius='4px';
-        const canvas=document.createElement('canvas');
-        canvas.style.display='block';
-        canvas.style.width='100%';
-        canvas.style.height='auto';
+        const wrap = document.createElement('div');
+        wrap.className = 'pdf-page';
+        wrap.dataset.page = String(num);
+        wrap.style.position = 'relative';
+        wrap.style.margin = '12px auto';
+        wrap.style.background = '#fff';
+        wrap.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)';
+        wrap.style.width = 'min(95%, 840px)';
+        wrap.style.borderRadius = '4px';
+        const canvas = document.createElement('canvas');
+        canvas.style.display = 'block';
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
         wrap.appendChild(canvas);
-        return {wrap,canvas};
+        return {wrap, canvas};
       }
 
       function renderPage(num){
-        return pdf.getPage(num).then(page=>{
-          const {wrap,canvas}=pageContainer(num);
+        return pdf.getPage(num).then(page => {
+          const {wrap, canvas} = pageContainer(num);
           pagesHost.appendChild(wrap);
-          const viewport=page.getViewport({ scale:1.5 });
-          const ctx=canvas.getContext('2d');
-          canvas.height=viewport.height; canvas.width=viewport.width;
-          return page.render({ canvasContext:ctx, viewport }).promise;
+          const viewport = page.getViewport({ scale: 1.5 });
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width  = viewport.width;
+          return page.render({canvasContext: context, viewport}).promise;
         });
       }
 
-      pdfjsLib.getDocument(url).promise.then(async _pdf=>{
-        pdf=_pdf;
-        total=pdf.numPages;
-        hudSet(current||1,total);
-        postDebounced(current||1,total);
+      // Init
+      (async function init(){
+        const doc = await pdfjsLib.getDocument(url).promise;
+        pdf = doc;
+        total = pdf.numPages;
+        hudSet(current || 1, total);
 
-        for(let i=1;i<=pdf.numPages;i++){ /* eslint-disable-line no-await-in-loop */
+        // render sequentially to keep memory sane
+        for (let i = 1; i <= pdf.numPages; i++){
+          /* eslint-disable no-await-in-loop */
           await renderPage(i);
         }
 
-        const target = pagesHost.querySelector(`.pdf-page[data-page="${current||1}"]`);
+        // scroll to last saved page if any
+        const target = pagesHost.querySelector(`.pdf-page[data-page="${current || 1}"]`);
         if (target){
           const top = target.offsetTop - 24;
-          scrollEl.scrollTo({ top, behavior:'auto' });
+          scrollEl.scrollTo({ top, behavior: 'auto' });
         }
 
-        scrollEl.addEventListener('scroll', onScroll, { passive:true });
-        window.addEventListener('resize', debounce(onScroll,150));
-      });
+        // Load note for initial page
+        await loadNoteFor(current || 1);
+
+        scrollEl.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', debounce(onScroll, 150));
+      })();
     })();
     {% endif %}
 
-    // Notes: autosave on scroll; transparent fields; live page label + count
+    // Minimal autosave when user manually edits the page number in the Notes pane
     (function(){
-      const form   = document.getElementById('noteForm');
+      const form = document.getElementById('noteForm');
       if (!form) return;
-
-      const list   = document.getElementById('noteList');
-      const empty  = document.getElementById('notesEmpty');
       const pageIn = form.querySelector('.note-page');
       const title  = form.querySelector('.note-title');
       const body   = form.querySelector('.note-text');
       const label  = document.getElementById('notesPageLabel');
 
-      let lastSent = '';
-      let saving   = false;
+      function setLabel(p){ if (label) label.textContent = 'Page ' + p; }
 
-      function updateLabel(){
-        if (label && pageIn) label.textContent = 'Page ' + (pageIn.value || '0');
-      }
-      pageIn && pageIn.addEventListener('input', updateLabel);
-      updateLabel();
-
-      function updateCount(){
-        const count = list ? list.querySelectorAll('.note').length : 0;
-        if (empty){
-          if (count > 0) { empty.style.display='none'; }
-          else { empty.style.display=''; empty.textContent='No notes yet.'; }
-        }
-      }
-      updateCount();
-
-      function contentKey(){
-        return [pageIn?.value||'', title?.value||'', body?.value||''].join('\n---\n');
-      }
-
-      async function autosave(){
-        const key = contentKey().trim();
-        if (!key || key === lastSent) return;
-        if (saving) return;
-        saving = true;
+      pageIn.addEventListener('change', async ()=>{
+        const p = parseInt(pageIn.value || '0', 10) || 0;
+        setLabel(p);
+        // Load the note for this manually selected page
         try{
-          const fd = new FormData(form);
-          await fetch(form.action, { method:'POST', body: fd });
-          lastSent = key;
-        }catch(_){/* silent */}
-        saving = false;
-      }
-
-      const onScrollSave = (e)=>{
-        // Only react to scrolls occurring inside the Notes pane
-        const pane = e.target.closest && e.target.closest('.notes');
-        if (pane) autosave();
-      };
-      document.addEventListener('scroll', onScrollSave, { passive:true, capture:true });
+          const q = new URLSearchParams({ page: String(p) });
+          const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());
+          const data = await res.json();
+          if (data.ok){
+            const n = data.note;
+            title.value = n ? (n.title || '') : '';
+            body.value  = n ? (n.text  || '') : '';
+          }
+        }catch(_){}
+      });
     })();
   </script>
 </body>
