@@ -7,6 +7,7 @@ from sqlalchemy.orm import declarative_base, relationship, sessionmaker, scoped_
 from datetime import datetime
 import os
 import re
+import json
 
 app = Flask(__name__)
 app.secret_key = "super-secret-key"
@@ -17,7 +18,8 @@ UPLOAD_DIR = os.path.join(BASE_DIR, "static", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_COVER = {"png", "jpg", "jpeg", "webp"}
-ALLOWED_FILE = {"pdf", "epub", "mobi"}
+# Tighten to PDF only (server-side validation)
+ALLOWED_FILE = {"pdf"}
 
 def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
@@ -106,10 +108,10 @@ class Annotation(Base):
     __tablename__ = "annotations"
     id = Column(Integer, primary_key=True)
     note_id = Column(Integer, ForeignKey("notes.id", ondelete="CASCADE"), index=True, nullable=False)
-    pos_x = Column(Integer, nullable=True)
+    pos_x = Column(Integer, nullable=True)   # normalized 0..1 for boxes
     pos_y = Column(Integer, nullable=True)
-    text = Column(Text, nullable=True)
-    style = Column(String(20), nullable=True)
+    text  = Column(Text, nullable=True)      # for boxes: content; for strokes: JSON string of points
+    style = Column(String(100), nullable=True)  # e.g. "type=box;w=0.25;h=0.12" or "type=stroke;tool=highlighter;width=8;color=#0F352466"
 
 Base.metadata.create_all(bind=engine)
 
@@ -293,7 +295,10 @@ def add_book():
         cover_path = f"uploads/{fname}"
 
     doc = request.files.get('file')
-    if doc and doc.filename and _ext_ok(doc.filename, ALLOWED_FILE):
+    if doc and doc.filename:
+        if not _ext_ok(doc.filename, ALLOWED_FILE):
+            flash("Only PDF files are supported at the moment.", "error")
+            return redirect(url_for('bookshelf'))
         fname = f"{uid}_{int(datetime.utcnow().timestamp())}_file_{secure_filename(doc.filename)}"
         doc.save(os.path.join(UPLOAD_DIR, fname))
         file_path = f"uploads/{fname}"
@@ -414,7 +419,6 @@ def add_note(book_id):
             flash("Book not found.", "error")
             return redirect(url_for('bookshelf'))
 
-        # Upsert per-page note (one note per page per book per user)
         note = db.query(Note).filter(
             and_(Note.owner_id == uid, Note.book_id == book.id, Note.page == page)
         ).first()
@@ -424,7 +428,6 @@ def add_note(book_id):
         note.title = title or None
         note.text  = text  or None
         db.commit()
-        # No flash; this route is often called via JS
     except Exception as e:
         db.rollback()
         print("Add/Upsert note error:", e)
@@ -461,7 +464,11 @@ def update_progress(book_id):
     if (redir := require_login()):
         return redir
     uid = current_user_id()
-    page = max(0, int(request.form.get("page", 0) or 0))
+    raw = request.form.get("page", "0") or "0"
+    try:
+        page = max(0, int(raw))
+    except ValueError:
+        page = 0
     db = SessionLocal()
     try:
         book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
@@ -472,13 +479,16 @@ def update_progress(book_id):
         if not book.progress:
             book.progress = ReadingProgress(book_id=book.id, current_page=page)
         else:
+            # Keep within known total if present
+            if book.progress.total_pages and page > book.progress.total_pages:
+                page = book.progress.total_pages
             book.progress.current_page = page
         db.commit()
-        return redirect(url_for("read_book", book_id=book_id))
+        return redirect(url_for('read_book', book_id=book_id))
     except Exception as e:
         db.rollback()
         print("Progress error:", e)
-        return redirect(url_for("read_book", book_id=book_id))
+        return redirect(url_for('read_book', book_id=book_id))
     finally:
         db.close()
 
@@ -586,107 +596,7 @@ def ask_ai():
     q = (request.form.get('q') or '').strip()
     return jsonify({"ok": True, "answer": "AI summary is coming soon. (Stub)\n\nQuestion: " + (q or "(empty)")})
 
-if __name__ == '__main__':
-    server = Server(app.wsgi_app)
-    server.serve(port=5001, debug=True)
-
 # --- Inline text boxes (per-page) -------------------------------------------
-
-def get_or_create_page_note(db, owner_id: int, book_id: int, page: int) -> Note:
-    note = (
-        db.query(Note)
-        .filter_by(owner_id=owner_id, book_id=book_id, page=page, title="Inline boxes")
-        .first()
-    )
-    if note:
-        return note
-    note = Note(owner_id=owner_id, book_id=book_id, page=page, title="Inline boxes", text=None)
-    db.add(note)
-    db.flush()
-    return note
-
-@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['GET'])
-def api_list_boxes(book_id, page):
-    if not current_user_id():
-        return jsonify({"ok": False, "error": "auth"}), 401
-    uid = current_user_id()
-    db = SessionLocal()
-    try:
-        # only annotations whose note belongs to this user/book/page
-        rows = (
-            db.query(Annotation)
-            .join(Note, Annotation.note_id == Note.id)
-            .filter(
-                Note.owner_id == uid,
-                Note.book_id == book_id,
-                Note.page == page
-            )
-            .all()
-        )
-        items = []
-        for a in rows:
-            # style keeps width/height percentages as "w=..;h=.."
-            w = h = None
-            if a.style:
-                for part in a.style.split(';'):
-                    k, _, v = part.partition('=')
-                    if k.strip() == 'w':
-                        w = float(v or 0)
-                    if k.strip() == 'h':
-                        h = float(v or 0)
-            items.append({
-                "id": a.id,
-                "x": a.pos_x, "y": a.pos_y,  # 0..1 normalized
-                "w": w or 0.25, "h": h or 0.12,
-                "text": a.text or ""
-            })
-        return jsonify({"ok": True, "boxes": items})
-    except Exception as e:
-        print("List boxes error:", e)
-        return jsonify({"ok": False, "error": "server"}), 500
-    finally:
-        db.close()
-
-@app.route('/api/books/<int:book_id>/pages/<int:page>/boxes', methods=['POST'])
-def api_add_box(book_id, page):
-    if not current_user_id():
-        return jsonify({"ok": False, "error": "auth"}), 401
-    uid = current_user_id()
-    data = request.get_json(silent=True) or {}
-    x = float(data.get("x") or 0)   # normalized 0..1
-    y = float(data.get("y") or 0)
-    w = float(data.get("w") or 0.25)
-    h = float(data.get("h") or 0.12)
-    text = (data.get("text") or "").strip()
-
-    db = SessionLocal()
-    try:
-        # ensure the user actually owns the book
-        book = db.query(Book).filter(Book.id == book_id, Book.owner_id == uid).first()
-        if not book:
-            db.close()
-            return jsonify({"ok": False, "error": "not_found"}), 404
-
-        page_note = get_or_create_page_note(db, uid, book_id, page)
-        a = Annotation(
-            note_id=page_note.id,
-            start=0, end=0, enabled=True,
-            pos_x=x, pos_y=y,
-            text=text or "",
-            style=f"w={w};h={h}"
-        )
-        db.add(a)
-        db.commit()
-        return jsonify({"ok": True, "id": a.id})
-    except Exception as e:
-        db.rollback()
-        print("Add box error:", e)
-        return jsonify({"ok": False, "error": "server"}), 500
-    finally:
-        db.close()
-
-# ---- Inline text boxes (per-page) -------------------------------------------
-
 def get_or_create_page_note(db, owner_id: int, book_id: int, page: int, title="Inline boxes") -> Note:
     note = (
         db.query(Note)
@@ -710,8 +620,12 @@ def api_list_boxes(book_id, page):
         rows = (
             db.query(Annotation)
             .join(Note, Annotation.note_id == Note.id)
-            .filter(Note.owner_id == uid, Note.book_id == book_id, Note.page == page,
-                    (Annotation.style.like('w=%;h=%') | Annotation.style.like('%type=box%')))
+            .filter(
+                Note.owner_id == uid,
+                Note.book_id == book_id,
+                Note.page == page,
+                Annotation.style.like('type=box%')
+            )
             .all()
         )
         items = []
@@ -782,7 +696,6 @@ def api_update_box(book_id, page, ann_id):
         a.text = text
         if x is not None: a.pos_x = float(x)
         if y is not None: a.pos_y = float(y)
-        # rebuild style if w/h provided
         if w is not None or h is not None:
             parts = {"type":"box","w":None,"h":None}
             if a.style:
@@ -801,7 +714,6 @@ def api_update_box(book_id, page, ann_id):
         db.close()
 
 # ---- Freehand strokes (highlighter + thin pen) ------------------------------
-
 @app.route('/api/books/<int:book_id>/pages/<int:page>/strokes', methods=['GET'])
 def api_list_strokes(book_id, page):
     if not current_user_id():
@@ -827,7 +739,7 @@ def api_list_strokes(book_id, page):
                 "tool": meta["tool"],
                 "width": float(meta["width"] or 6),
                 "color": meta["color"] or "#0F352466",
-                "points": a.text or "[]",   # JSON stringified list of normalized points
+                "points": a.text or "[]",
             })
         return jsonify({"ok": True, "strokes": items})
     finally:
@@ -841,12 +753,16 @@ def api_add_stroke(book_id, page):
     data = request.get_json(silent=True) or {}
     tool  = (data.get("tool")  or "highlighter").strip()
     width = float(data.get("width") or 8)
-    color = (data.get("color") or "#0F352466").strip()  # 40% opacity default
+    color = (data.get("color") or "#0F352466").strip()  # default 40% opacity green
     points_json = data.get("points") or "[]"
+    # validate points_json basic shape
+    try:
+        json.loads(points_json)
+    except Exception:
+        points_json = "[]"
 
     db = SessionLocal()
     try:
-        # one note to hold all strokes per page
         stroke_note = get_or_create_page_note(db, uid, book_id, page, title="Canvas strokes")
         a = Annotation(
             note_id=stroke_note.id, start=0, end=0, enabled=True,
@@ -861,4 +777,7 @@ def api_add_stroke(book_id, page):
     finally:
         db.close()
 
-        
+# ---- Boot (keep at BOTTOM so routes are registered before first request) ----
+if __name__ == '__main__':
+    server = Server(app.wsgi_app)
+    server.serve(port=5001, debug=True)

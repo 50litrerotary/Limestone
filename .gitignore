@@ -1,29 +1,29 @@
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
+
 # Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 .venv/
 venv/
 .env
-.env.*
 
-# macOS
-.DS_Store
+# Flask/Build
+instance/
+*.sqlite3
+*.db
 
-# Flask livereload / caches
-*.egg-info/
-.cache/
-.pytest_cache/
-coverage/
+# Project-specific
+static/uploads/
+static/*.pdf
 *.log
 
-# Editors
-.vscode/
-.idea/
-*.swp
-
-# SQLite (if ever used locally)
-*.sqlite
-
-# App-specific: don't commit user uploads
-static/uploads/*
-!static/uploads/.gitkeep
+# Node (if any)
+node_modules/
