@@ -14,29 +14,25 @@
   </a>
 
   <div class="reader-shell">
-    <!-- Top bar only across the middle reader column, no title text -->
-<header class="topbar">
-  <div class="bar-inner">
-    <!-- leave implicit space for exit button at far left -->
-    <button id="btnTextBox" class="tool-btn" title="Text box">
-      <img src="{{ url_for('static', filename='img/text_box.png') }}" alt="T">
-    </button>
-    <button id="btnHighlighter" class="tool-btn" title="Highlighter">
-      <img src="{{ url_for('static', filename='img/highlighter.png') }}" alt="Highlighter">
-    </button>
-    <button id="btnDrawer" class="tool-btn" title="Thin pen">
-      <img src="{{ url_for('static', filename='img/drawer.png') }}" alt="Pen">
-    </button>
-  </div>
-</header>
+    <!-- Top bar (tools) -->
+    <header class="topbar">
+      <div class="bar-inner">
+        <button id="btnTextBox" class="tool-btn" title="Text box">
+          <img src="{{ url_for('static', filename='img/text_box.png') }}" alt="T">
+        </button>
+        <button id="btnHighlighter" class="tool-btn" title="Highlighter">
+          <img src="{{ url_for('static', filename='img/highlighter.png') }}" alt="Highlighter">
+        </button>
+        <button id="btnDrawer" class="tool-btn" title="Thin pen">
+          <img src="{{ url_for('static', filename='img/drawer.png') }}" alt="Pen">
+        </button>
+      </div>
+    </header>
 
     <div class="layout">
-      <!-- Ask AI (left quarter) -->
+      <!-- Ask AI (left) -->
       <aside class="askai">
-        <!-- response area stays transparent; pushed down so it never hides under exit -->
         <pre id="aiOut" class="ai-out"></pre>
-
-        <!-- locked input at bottom-left -->
         <form id="aiForm" class="ai-form">
           <div class="ai-input">
             <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
@@ -48,69 +44,68 @@
       </aside>
 
 {% if file_url %}
-  <!-- Middle half: digital reader -->
-  <main class="book-area with-file" data-tool="none">
-    <div
-      id="pdfScroll"
-      class="pdf-scroll"
-      data-ink-color="#0F3524"
-      data-ink-opacity="0.15"   <!-- fixed highlighter opacity -->
-      data-pen-color="#123E2A"  <!-- drawer pen -->
-    >
-      <div id="pdfPages" class="pdf-pages"></div>
+      <!-- Middle: digital reader -->
+      <main class="book-area with-file" data-tool="none">
+        <div id="pdfScroll" class="pdf-scroll">
+          <div id="pdfPages" class="pdf-pages"></div>
 
-      <!-- Templates for per-page overlays and text boxes (cloned by JS) -->
-      <template id="tplOverlay">
-        <div class="overlay-layer">
-          <canvas class="draw-canvas" data-page=""></canvas>
+          <!-- Templates for per-page overlays and text boxes -->
+          <template id="tplOverlay">
+            <div class="overlay-layer">
+              <canvas class="draw-canvas" data-page=""></canvas>
+            </div>
+          </template>
+
+          <template id="tplTextbox">
+            <div class="textbox" contenteditable="true" spellcheck="false"></div>
+          </template>
         </div>
-      </template>
 
-      <template id="tplTextbox">
-        <div class="textbox" contenteditable="true" spellcheck="false"></div>
-      </template>
-    </div>
-
-    <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-      <label>
-        Page
-        <input id="pageInput" type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
-        {% if total_pages %}/ {{ total_pages }}{% endif %}
-      </label>
-      <button class="btn-save" type="submit">Save</button>
-    </form>
-  </main>
+        <!-- Footer controls: Undo / Clear page / Save -->
+        <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
+          <div class="controls-left">
+            <button type="button" id="btnUndo" class="btn-ghost">Undo</button>
+            <button type="button" id="btnClear" class="btn-ghost">Clear page</button>
+          </div>
+          <label>
+            Page
+            <input id="pageInput" type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
+            {% if total_pages %}/ {{ total_pages }}{% endif %}
+          </label>
+          <button class="btn-save" type="submit">Save</button>
+        </form>
+      </main>
 {% else %}
-  <!-- Middle half: physical book info -->
-  <main class="book-area no-file">
-    <div class="no-file-msg">
-      <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
-      <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
-      <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-        <label>Page <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
-        <button class="btn-save" type="submit">Save</button>
-      </form>
-    </div>
-  </main>
+      <!-- Middle: physical book info -->
+      <main class="book-area no-file">
+        <div class="no-file-msg">
+          <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
+          <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
+          <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
+            <div class="controls-left">
+              <button type="button" id="btnUndo" class="btn-ghost" disabled>Undo</button>
+              <button type="button" id="btnClear" class="btn-ghost" disabled>Clear page</button>
+            </div>
+            <label>Page <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
+            <button class="btn-save" type="submit">Save</button>
+          </form>
+        </div>
+      </main>
 {% endif %}
 
-      <!-- Notes (right quarter) -->
+      <!-- Notes (right) -->
       <aside class="notes{% if not file_url %} expanded{% endif %}">
         <div class="notes-page-num" id="notesPageLabel">
           Page {{ current_page or 0 }}
         </div>
 
-        <!-- No “Add note” button; we upsert on page switch and manual autosave -->
         <form id="noteForm" class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
           <div class="row">
             <input class="note-title" type="text" name="title" placeholder="Title">
-            <input class="note-page"  type="number" name="page" min="0" placeholder="Page #"
-                  value="{{ current_page or 0 }}">
+            <input class="note-page"  type="number" name="page" min="0" placeholder="Page #" value="{{ current_page or 0 }}">
           </div>
           <textarea class="note-text" name="text" rows="6" placeholder="Enter text from here."></textarea>
         </form>
-
-        <!-- No list — notes are per page and loaded in place -->
       </aside>
     </div>
   </div>
@@ -118,7 +113,7 @@
   <div id="pageHud" class="page-hud">– / –</div>
 
   <script>
-    // Ask AI
+    // --- Ask AI (stub passthrough) ---
     (function(){
       const f = document.getElementById('aiForm');
       const out = document.getElementById('aiOut');
@@ -135,11 +130,10 @@
       });
     })();
 
-    // Helpers shared by PDF + Notes
     function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
     {% if file_url %}
-    // PDF.js viewer + progress autosave + note page binding
+    // ================= PDF Viewer + Tools + Undo/Clear =================
     (function(){
       const pdfjsLib = window['pdfjs-dist/build/pdf'];
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -150,26 +144,62 @@
       const hud       = document.getElementById('pageHud');
       const pageInput = document.getElementById('pageInput');
 
-      // Notes form refs
+      const tplOverlay = document.getElementById('tplOverlay');
+      const tplTextbox = document.getElementById('tplTextbox');
+
+      const btnUndo  = document.getElementById('btnUndo');
+      const btnClear = document.getElementById('btnClear');
+
+      const TOOL = { NONE:'none', BOX:'box', HIGHLIGHT:'highlighter', DRAW:'drawer' };
+      const state = {
+        tool: TOOL.NONE,
+        pdf: null,
+        total: {{ (total_pages or 'null') }},
+        current: {{ (current_page or 1) }},
+        posting: false,
+        overlays: new Map(), // page -> { layer, canvas, ctx, w, h, pageDiv }
+        undo: new Map()      // page -> [{kind:'stroke'|'box', id, localNode?}]
+      };
+
+      // Uniform ink (no multiply halo)
+      const INK = {
+        highlighterRGBA: 'rgba(15,53,36,0.25)', // even, consistent
+        penColor: '#123E2A',
+        highlighterWidth: 16,
+        penWidth: 2
+      };
+
+      // --- Toolbar (mode selection) ---
+      const btnBox  = document.getElementById('btnTextBox');
+      const btnHi   = document.getElementById('btnHighlighter');
+      const btnDraw = document.getElementById('btnDrawer');
+
+      function setTool(t){
+        state.tool = t;
+        document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+        scrollEl.classList.remove('textbox-mode','highlight-mode','draw-mode');
+        if (t === TOOL.BOX){ btnBox.classList.add('active'); scrollEl.classList.add('textbox-mode'); }
+        if (t === TOOL.HIGHLIGHT){ btnHi.classList.add('active'); scrollEl.classList.add('highlight-mode'); }
+        if (t === TOOL.DRAW){ btnDraw.classList.add('active'); scrollEl.classList.add('draw-mode'); }
+      }
+      btnBox .addEventListener('click', ()=> setTool(state.tool===TOOL.BOX?TOOL.NONE:TOOL.BOX));
+      btnHi  .addEventListener('click', ()=> setTool(state.tool===TOOL.HIGHLIGHT?TOOL.NONE:TOOL.HIGHLIGHT));
+      btnDraw.addEventListener('click', ()=> setTool(state.tool===TOOL.DRAW?TOOL.NONE:TOOL.DRAW));
+
+      // --- Notes binding & progress ---
       const noteForm = document.getElementById('noteForm');
       const noteTitle = noteForm.querySelector('.note-title');
       const notePage  = noteForm.querySelector('.note-page');
       const noteText  = noteForm.querySelector('.note-text');
       const pageLabel = document.getElementById('notesPageLabel');
 
-      let pdf=null;
-      let total={{ (total_pages or 'null') }};
-      let current={{ (current_page or 0) }};
-      let posting=false;
-
       let noteDirty = false;
-      let activeNotePage = current || 0;
+      let activeNotePage = state.current || 1;
 
       function hudSet(p, t){ hud.textContent = t ? (p + ' / ' + t) : (String(p) + ' / –'); }
       function setLabel(p){ if (pageLabel){ pageLabel.textContent = 'Page ' + p; } }
       function setNotePage(p){ notePage.value = p; setLabel(p); }
 
-      // ---- NOTES: load & save per page ----
       async function loadNoteFor(page){
         try{
           const q = new URLSearchParams({ page: String(page) });
@@ -185,42 +215,33 @@
           }
         }catch(_){}
       }
-
       async function saveNoteFor(page){
         if (!noteDirty) return;
         try{
-          const payload = {
-            page: page,
-            title: noteTitle.value || '',
-            text:  noteText.value  || ''
-          };
+          const payload = { page, title: noteTitle.value || '', text: noteText.value || '' };
           await fetch(`/api/books/{{ book.id }}/notes/upsert_by_page`, {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body: JSON.stringify(payload)
+            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
           });
           noteDirty = false;
         }catch(_){}
       }
-
       noteTitle.addEventListener('input', ()=>{ noteDirty = true; });
       noteText .addEventListener('input', ()=>{ noteDirty = true; });
 
-      // ---- PROGRESS: save + drive notes binding ----
       async function postProgress(p, t){
-        if (posting) return;
-        posting = true;
+        if (state.posting) return;
+        state.posting = true;
         try{
           await fetch(`/api/books/{{ book.id }}/progress`, {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
+            method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({page: p, total: t})
           });
         }catch(_){}
-        posting = false;
+        state.posting = false;
       }
       const postDebounced = debounce(postProgress, 350);
 
+      // --- Page visibility / scrolling ---
       function visiblePage(){
         const items = pagesHost.querySelectorAll('.pdf-page');
         let bestId = 1, bestRatio = -1;
@@ -237,31 +258,232 @@
         });
         return bestId;
       }
-
       async function onScroll(){
         const p = visiblePage();
-        if (p !== current){
-          // save note for previous page (if dirty) BEFORE switching
+        if (p !== state.current){
           await saveNoteFor(activeNotePage);
-          current = p;
-          hudSet(current, total);
-          if (pageInput) pageInput.value = current;
-          postDebounced(current, total);
-          // load note for the new page
-          await loadNoteFor(current);
+          state.current = p;
+          hudSet(state.current, state.total);
+          if (pageInput) pageInput.value = state.current;
+          postDebounced(state.current, state.total);
+          await loadNoteFor(state.current);
         }
       }
 
+      // --- Overlay bootstrap + input handlers ---
+      function ensureOverlayFor(pageDiv, pageNum){
+        if (state.overlays.has(pageNum)) return state.overlays.get(pageNum);
+        const frag = tplOverlay.content.cloneNode(true);
+        const layer = frag.querySelector('.overlay-layer');
+        const canvas = frag.querySelector('.draw-canvas');
+        canvas.dataset.page = String(pageNum);
+        pageDiv.appendChild(frag);
+        const ctx = canvas.getContext('2d');
+        const entry = { layer, canvas, ctx, w: 0, h: 0, pageDiv };
+        state.overlays.set(pageNum, entry);
+
+        // Drawing
+        let drawing = false;
+        let last = null;
+        let points = [];
+
+        function toCanvasXY(evt){
+          const r = canvas.getBoundingClientRect();
+          return { x: evt.clientX - r.left, y: evt.clientY - r.top };
+        }
+        function pushPoint(pt){ points.push([pt.x/entry.w, pt.y/entry.h]); }
+
+        canvas.addEventListener('mousedown', (e)=>{
+          if (state.tool !== TOOL.HIGHLIGHT && state.tool !== TOOL.DRAW) return;
+          drawing = true; last = toCanvasXY(e); points = []; pushPoint(last); e.preventDefault();
+        });
+        window.addEventListener('mousemove', (e)=>{
+          if (!drawing) return;
+          const cur = toCanvasXY(e);
+          entry.ctx.lineCap = 'round';
+          entry.ctx.lineJoin = 'round';
+          if (state.tool === TOOL.HIGHLIGHT){
+            entry.ctx.strokeStyle = INK.highlighterRGBA;
+            entry.ctx.lineWidth   = INK.highlighterWidth;
+            entry.ctx.globalAlpha = 1;
+            entry.ctx.globalCompositeOperation = 'source-over';
+          }else{
+            entry.ctx.strokeStyle = INK.penColor;
+            entry.ctx.lineWidth   = INK.penWidth;
+            entry.ctx.globalAlpha = 1;
+            entry.ctx.globalCompositeOperation = 'source-over';
+          }
+          entry.ctx.beginPath();
+          entry.ctx.moveTo(last.x, last.y);
+          entry.ctx.lineTo(cur.x, cur.y);
+          entry.ctx.stroke();
+          last = cur; pushPoint(cur);
+        });
+        window.addEventListener('mouseup', async ()=>{
+          if (!drawing) return; drawing = false; last = null;
+          if (points.length >= 2){
+            const payload = {
+              tool: state.tool === TOOL.HIGHLIGHT ? 'highlighter' : 'drawer',
+              width: state.tool === TOOL.HIGHLIGHT ? INK.highlighterWidth : INK.penWidth,
+              color: state.tool === TOOL.HIGHLIGHT ? INK.highlighterRGBA : INK.penColor,
+              points: JSON.stringify(points)
+            };
+            try{
+              const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`, {
+                method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+              });
+              const data = await res.json();
+              if (data.ok){ pushUndo(pageNum, { kind:'stroke', id:data.id }); }
+            }catch(_){}
+          }
+        });
+
+        // Click-to-place textbox
+        pageDiv.addEventListener('click', async (e)=>{
+          if (state.tool !== TOOL.BOX) return;
+          // Ignore clicks on existing boxes (so you can edit them)
+          if (e.target.closest('.textbox')) return;
+
+          const r = pageDiv.getBoundingClientRect();
+          const x = (e.clientX - r.left) / r.width;
+          const y = (e.clientY - r.top)  / r.height;
+
+          // Create DOM box immediately, with constrained size
+          const box = tplTextbox.content.firstElementChild.cloneNode(true);
+          const wPct = 0.25, hPct = 0.12;
+          box.style.left = (x * 100) + '%';
+          box.style.top  = (y * 100) + '%';
+          box.style.width  = (wPct * 100) + '%';
+          box.style.height = (hPct * 100) + '%';
+          pageDiv.appendChild(box);
+          box.focus();
+
+          // Persist box (position & initial size)
+          try{
+            const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`,{
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ x, y, w: wPct, h: hPct, text: '' })
+            });
+            const data = await res.json();
+            if (data.ok){
+              box.dataset.annId = data.id;
+              enableBoxEditing(box, pageNum, data.id);
+              pushUndo(pageNum, { kind:'box', id:data.id, localNode:box });
+            }
+          }catch(_){}
+        });
+
+        return entry;
+      }
+
+      // Undo stack helpers
+      function pushUndo(page, item){
+        if (!state.undo.has(page)) state.undo.set(page, []);
+        state.undo.get(page).push(item);
+      }
+      async function doUndo(){
+        const page = state.current || 1;
+        const stack = state.undo.get(page) || [];
+        const last = stack.pop();
+        if (!last) return;
+        if (last.kind === 'stroke'){
+          try{
+            await fetch(`/api/books/{{ book.id }}/pages/${page}/strokes/${last.id}`, { method:'DELETE' });
+            await redrawStrokes(page);
+          }catch(_){}
+        }else if (last.kind === 'box'){
+          if (last.localNode && last.localNode.remove) last.localNode.remove();
+          try{
+            await fetch(`/api/books/{{ book.id }}/pages/${page}/boxes/${last.id}`, { method:'DELETE' });
+          }catch(_){}
+        }
+      }
+
+      // Clear page (delete everything on current page)
+      async function clearPage(){
+        const page = state.current || 1;
+        const entry = state.overlays.get(page);
+        if (!entry) return;
+        try{
+          // delete strokes
+          const sRes = await fetch(`/api/books/{{ book.id }}/pages/${page}/strokes`);
+          const sData = await sRes.json();
+          if (sData.ok){
+            for (const s of sData.strokes){
+              /* eslint-disable no-await-in-loop */
+              await fetch(`/api/books/{{ book.id }}/pages/${page}/strokes/${s.id}`, { method:'DELETE' });
+            }
+          }
+          // delete boxes
+          const bRes = await fetch(`/api/books/{{ book.id }}/pages/${page}/boxes`);
+          const bData = await bRes.json();
+          if (bData.ok){
+            for (const b of bData.boxes){
+              /* eslint-disable no-await-in-loop */
+              await fetch(`/api/books/{{ book.id }}/pages/${page}/boxes/${b.id}`, { method:'DELETE' });
+            }
+          }
+        }catch(_){}
+        // UI refresh
+        await redrawStrokes(page);
+        entry.pageDiv.querySelectorAll('.textbox').forEach(n=>n.remove());
+        // reset undo stack for the page
+        state.undo.set(page, []);
+      }
+
+      // Bind footer controls
+      btnUndo?.addEventListener('click', doUndo);
+      btnClear?.addEventListener('click', clearPage);
+
+      function enableBoxEditing(boxEl, pageNum, annId){
+        // Keep text inside: scroll, no auto-grow
+        // Save text on debounce/blur
+        let t;
+        function save(){
+          const text = boxEl.innerText || '';
+          fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${annId}`, {
+            method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ text })
+          }).catch(()=>{});
+        }
+        boxEl.addEventListener('input', ()=>{ clearTimeout(t); t = setTimeout(save, 300); });
+        boxEl.addEventListener('blur', save);
+
+        // Drag move (only in box tool)
+        let dragging=false, ox=0, oy=0, startL=0, startT=0;
+        boxEl.addEventListener('mousedown', (e)=>{
+          if (state.tool !== TOOL.BOX) return;
+          dragging=true; e.preventDefault();
+          const r = boxEl.getBoundingClientRect();
+          ox=e.clientX; oy=e.clientY; startL=r.left; startT=r.top;
+        });
+        window.addEventListener('mousemove', (e)=>{
+          if (!dragging) return;
+          const dx = e.clientX - ox, dy = e.clientY - oy;
+          const parent = boxEl.parentElement.getBoundingClientRect();
+          const nx = (startL + dx - parent.left)/parent.width;
+          const ny = (startT + dy - parent.top)/parent.height;
+          boxEl.style.left = Math.max(0, Math.min(0.98, nx))*100 + '%';
+          boxEl.style.top  = Math.max(0, Math.min(0.98, ny))*100 + '%';
+        });
+        window.addEventListener('mouseup', ()=>{
+          if (!dragging) return; dragging=false;
+          const parent = boxEl.parentElement.getBoundingClientRect();
+          const r = boxEl.getBoundingClientRect();
+          const nx = (r.left - parent.left) / parent.width;
+          const ny = (r.top  - parent.top ) / parent.height;
+          fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${annId}`, {
+            method:'PUT', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ x:nx, y:ny })
+          }).catch(()=>{});
+        });
+      }
+
+      // --- Render helpers ---
       function pageContainer(num){
         const wrap = document.createElement('div');
         wrap.className = 'pdf-page';
         wrap.dataset.page = String(num);
-        wrap.style.position = 'relative';
-        wrap.style.margin = '12px auto';
-        wrap.style.background = '#fff';
-        wrap.style.boxShadow = '0 2px 8px rgba(0,0,0,.12)';
-        wrap.style.width = 'min(95%, 840px)';
-        wrap.style.borderRadius = '4px';
         const canvas = document.createElement('canvas');
         canvas.style.display = 'block';
         canvas.style.width = '100%';
@@ -270,75 +492,139 @@
         return {wrap, canvas};
       }
 
-      function renderPage(num){
-        return pdf.getPage(num).then(page => {
-          const {wrap, canvas} = pageContainer(num);
-          pagesHost.appendChild(wrap);
-          const viewport = page.getViewport({ scale: 1.5 });
-          const context = canvas.getContext('2d');
-          canvas.height = viewport.height;
-          canvas.width  = viewport.width;
-          console.log(`Loaded PDF with ${pdf.numPages} pages`);
-          return page.render({canvasContext: context, viewport}).promise;
-        });
+      async function renderPage(num){
+        const page = await state.pdf.getPage(num);
+        const {wrap, canvas} = pageContainer(num);
+        pagesHost.appendChild(wrap);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const ctx = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width  = viewport.width;
+        await page.render({canvasContext: ctx, viewport}).promise;
+
+        // Overlay after rendering, matching size
+        const entry = ensureOverlayFor(wrap, num);
+        entry.canvas.width  = canvas.width;
+        entry.canvas.height = canvas.height;
+        entry.w = canvas.width; entry.h = canvas.height;
+
+        // Load persisted marks
+        await redrawStrokes(num);
+        await redrawBoxes(num, wrap);
       }
 
-      // Init
-      (async function init(){
-        const doc = await pdfjsLib.getDocument(url).promise;
-        pdf = doc;
-        total = pdf.numPages;
-        hudSet(current || 1, total);
+      async function redrawStrokes(pageNum){
+        const entry = state.overlays.get(pageNum);
+        if (!entry) return;
+        entry.ctx.clearRect(0,0,entry.w,entry.h);
+        try{
+          const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`);
+          const data = await res.json();
+          if (!data.ok) return;
+          for (const s of data.strokes){
+            const pts = JSON.parse(s.points || '[]');
+            entry.ctx.lineCap='round'; entry.ctx.lineJoin='round';
+            const isHi = (s.tool === 'highlighter');
+            entry.ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
+            entry.ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
+            entry.ctx.globalAlpha = 1;
+            entry.ctx.globalCompositeOperation = 'source-over';
+            entry.ctx.beginPath();
+            for (let i=1;i<pts.length;i++){
+              const p0 = { x: pts[i-1][0]*entry.w, y: pts[i-1][1]*entry.h };
+              const p1 = { x: pts[i][0]*entry.w,   y: pts[i][1]*entry.h   };
+              entry.ctx.moveTo(p0.x, p0.y);
+              entry.ctx.lineTo(p1.x, p1.y);
+            }
+            entry.ctx.stroke();
+          }
+        }catch(_){}
+      }
 
-        // render sequentially to keep memory sane
-        for (let i = 1; i <= pdf.numPages; i++){
+      async function redrawBoxes(pageNum, pageDiv){
+        pageDiv.querySelectorAll('.textbox').forEach(n=>n.remove());
+        try{
+          const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`);
+          const data = await res.json();
+          if (!data.ok) return;
+          for (const b of data.boxes){
+            const box = tplTextbox.content.firstElementChild.cloneNode(true);
+            box.style.left   = (b.x*100)+'%';
+            box.style.top    = (b.y*100)+'%';
+            // if server provided size, use it
+            const w = (b.w ?? 0.25), h = (b.h ?? 0.12);
+            box.style.width  = (w*100)+'%';
+            box.style.height = (h*100)+'%';
+            box.textContent  = b.text || '';
+            box.dataset.annId = b.id;
+            pageDiv.appendChild(box);
+            enableBoxEditing(box, pageNum, b.id);
+          }
+        }catch(_){}
+      }
+
+      // ---------- Bootstrap ----------
+      (async function init(){
+        state.pdf = await pdfjsLib.getDocument(url).promise;
+        state.total = state.pdf.numPages;
+        hudSet(state.current || 1, state.total);
+
+        for (let i=1; i<=state.pdf.numPages; i++){
           /* eslint-disable no-await-in-loop */
           await renderPage(i);
         }
 
-        // scroll to last saved page if any
-        const target = pagesHost.querySelector(`.pdf-page[data-page="${current || 1}"]`);
+        const target = pagesHost.querySelector(`.pdf-page[data-page="${state.current || 1}"]`);
         if (target){
           const top = target.offsetTop - 24;
           scrollEl.scrollTo({ top, behavior: 'auto' });
         }
 
-        // Load note for initial page
-        await loadNoteFor(current || 1);
+        await loadNoteFor(state.current || 1);
 
         scrollEl.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', debounce(onScroll, 150));
+
+        setTool(TOOL.NONE);
       })();
-    })();
-    {% endif %}
 
-    // Minimal autosave when user manually edits the page number in the Notes pane
-    (function(){
-      const form = document.getElementById('noteForm');
-      if (!form) return;
-      const pageIn = form.querySelector('.note-page');
-      const title  = form.querySelector('.note-title');
-      const body   = form.querySelector('.note-text');
-      const label  = document.getElementById('notesPageLabel');
+      // Manual page select in Notes pane
+      (function(){
+        const form = document.getElementById('noteForm');
+        if (!form) return;
+        const pageIn = form.querySelector('.note-page');
+        const title  = form.querySelector('.note-title');
+        const body   = form.querySelector('.note-text');
+        const label  = document.getElementById('notesPageLabel');
+        function setLabel(p){ if (label) label.textContent = 'Page ' + p; }
 
-      function setLabel(p){ if (label) label.textContent = 'Page ' + p; }
+        pageIn.addEventListener('change', async ()=>{
+          const p = parseInt(pageIn.value || '0', 10) || 0;
+          setLabel(p);
+          state.current = p;
+          hudSet(state.current, state.total);
+          try{
+            const q = new URLSearchParams({ page: String(p) });
+            const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());
+            const data = await res.json();
+            if (data.ok){
+              const n = data.note;
+              title.value = n ? (n.title || '') : '';
+              body.value  = n ? (n.text  || '') : '';
+            }
+          }catch(_){}
+        });
+      })();
 
-      pageIn.addEventListener('change', async ()=>{
-        const p = parseInt(pageIn.value || '0', 10) || 0;
-        setLabel(p);
-        // Load the note for this manually selected page
-        try{
-          const q = new URLSearchParams({ page: String(p) });
-          const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());
-          const data = await res.json();
-          if (data.ok){
-            const n = data.note;
-            title.value = n ? (n.title || '') : '';
-            body.value  = n ? (n.text  || '') : '';
-          }
-        }catch(_){}
+      // Keyboard Undo (Ctrl/Cmd+Z)
+      window.addEventListener('keydown', (e)=>{
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z'){
+          e.preventDefault();
+          doUndo();
+        }
       });
     })();
+    {% endif %}
   </script>
 </body>
 </html>

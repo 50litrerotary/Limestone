@@ -1,29 +1,36 @@
-# OS / editor junk
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-.vscode/
-.idea/
-
+cat > .gitignore << 'EOF'
 # Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.sqlite3
+
+# Virtual env
 .venv/
 venv/
-.env
 
-# Flask/Build
+# OS/editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Flask/instance stuff
 instance/
-*.sqlite3
-*.db
-
-# Project-specific
-static/uploads/
-static/*.pdf
 *.log
+
+# Local env/secrets
+.env
+.env.*
 
 # Node (if any)
 node_modules/
+
+# Artifacts
+dist/
+build/
+
+# Project-specific
+static/uploads/
+EOF

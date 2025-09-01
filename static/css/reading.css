@@ -8,9 +8,9 @@
   --text:#463F3F;
   --accent:#00361D;
 
-  /* NEW: ink colors */
-  --ink-highlighter: rgba(15,53,36,.40); /* #0F3524 at 40% */
-  --ink-pen: #123E2A;                    /* thin drawer pen */
+  /* Ink colors */
+  --ink-highlighter: rgba(15,53,36,.25); /* even 25% */
+  --ink-pen: #123E2A;
 }
 
 /* Base */
@@ -24,23 +24,44 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 .exit-btn-fixed{
   position:fixed; z-index:1001; top:8px; left:8px;
   width:50px; height:50px; display:inline-flex; align-items:center; justify-content:center;
-  border-radius:50%; background:transparent; box-shadow:none;
+  border-radius:50%; background:transparent; box-shadow:none; border:none;
 }
-.exit-btn-fixed img{ width:100%; height:100%; object-fit:contain; }
+.exit-btn-fixed img{ width:100%; height:100%; object-fit:contain; display:block; }
 
 /* Frame: 3 cols, short top bar */
 .reader-shell{
   min-height:100vh;
   display:grid;
   grid-template-columns: 1fr 2fr 1fr;
-  grid-template-rows: 46px 1fr; /* shorter top bar */
+  grid-template-rows: 46px 1fr;
 }
 .topbar{
   grid-column:2; grid-row:1;
   height:46px; background:var(--topbar); color:#fff;
   display:grid; grid-template-columns: 1fr minmax(720px, 1000px) 1fr; align-items:center;
 }
-.topbar .bar-inner{ grid-column:2; height:100%; }
+.topbar .bar-inner{
+  grid-column:2; height:100%;
+  display:flex; align-items:center; gap:10px; justify-content:flex-start;
+}
+
+/* Tool tokens (unchanged look) */
+.tool-btn{
+  width:40px; height:40px;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%;
+  background:#BEB8B2;
+  border:2px solid #463F3F;
+  box-shadow:0 2px 6px rgba(0,0,0,.25);
+  padding:0; cursor:pointer; user-select:none;
+}
+.tool-btn img{ width:110%; height:110%; object-fit:contain; display:block; }
+.tool-btn.active{ outline:3px solid rgba(0,54,29,.35); outline-offset:2px; }
+
+/* Cursors when tools active */
+.pdf-scroll.textbox-mode,
+.pdf-scroll.highlight-mode,
+.pdf-scroll.draw-mode{ cursor:crosshair; }
 
 /* Keep children on main grid */
 .layout{ display:contents; }
@@ -51,11 +72,9 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
   background:var(--ai);
   padding:12px; display:flex; flex-direction:column; min-height:0; position:relative;
 }
-/* response stays transparent; starts below exit */
 .ai-out{
   flex:1; background:transparent; margin-top:50px; padding:0 12px 12px 14px; border:0; white-space:pre-wrap; overflow:auto;
 }
-/* locked input at bottom-left */
 .ai-form{ position:absolute; left:16px; bottom:16px; margin:0; }
 .ai-input{ position:relative; width:300px; height:36px; }
 .ai-input input{
@@ -78,12 +97,63 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 .pdf-scroll::-webkit-scrollbar{ width:10px; }
 .pdf-scroll::-webkit-scrollbar-thumb{ background:var(--scroll); border-radius:6px; }
 
-/* Slim footer controls (~60% of old) */
-.progress-bar{
-  margin:10px auto 0; display:flex; gap:6px; align-items:center; justify-content:center; padding:4px 8px; font-size:13px;
+/* PDF page card */
+.pdf-page{
+  position:relative;
+  width:min(95%, 840px);
+  margin:12px auto;
+  background:#fff;
+  border-radius:4px;
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+  overflow:visible;
 }
-.progress-bar input[type="number"]{ height:28px; width:72px; padding:4px 6px; font-size:14px; border-radius:6px; border:1px solid rgba(0,0,0,.15); }
-.btn-save{ padding:6px 10px; font-size:13px; border-radius:8px; border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer; }
+/* Overlays */
+.pdf-page .overlay-layer{ position:absolute; inset:0; pointer-events:none; z-index:2; }
+.pdf-page .draw-canvas{ position:absolute; inset:0; pointer-events:auto; z-index:2; }
+
+/* Text boxes: translucent + confined content */
+.pdf-page .textbox{
+  position:absolute;
+  min-width:120px; min-height:48px;
+  background:rgba(255, 251, 230, 0.75); /* translucent */
+  border:1px solid rgba(0,0,0,.25);
+  border-radius:4px;
+  padding:6px 8px;
+  box-shadow:0 2px 6px rgba(0,0,0,.15);
+  font-family:"Tinos","Times New Roman",serif;
+  font-size:16px; line-height:1.35; color:#463F3F;
+  outline:none;
+  pointer-events:auto;
+  z-index:3;
+  user-select:text;
+
+  overflow:auto;          /* keep text inside */
+  word-break:break-word;  /* wrap long words */
+}
+
+/* Progress/footer */
+.progress-bar{
+  margin:10px auto 0;
+  display:flex; gap:12px; align-items:center; justify-content:center;
+  padding:4px 8px; font-size:13px; flex-wrap:wrap;
+}
+.progress-bar .controls-left{
+  display:flex; gap:8px; align-items:center;
+}
+.progress-bar input[type="number"]{
+  height:28px; width:72px; padding:4px 6px;
+  font-size:14px; border-radius:6px; border:1px solid rgba(0,0,0,.15);
+  background:#fff;
+}
+.btn-save{
+  padding:6px 10px; font-size:13px; border-radius:8px;
+  border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer;
+}
+.btn-ghost{
+  padding:6px 10px; font-size:13px; border-radius:8px;
+  border:1px solid #cfc6b8; background:transparent; cursor:pointer; color:#463F3F;
+}
+.btn-ghost:hover{ background:rgba(0,0,0,.04); }
 
 /* Notes pane */
 .notes{
@@ -92,132 +162,57 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
   padding:0; display:flex; flex-direction:column; overflow:hidden;
 }
 .notes.expanded{ grid-column:2 / span 2; grid-row:1 / span 2; }
-
-/* centered page number at top */
 .notes-page-num{
   text-align:center; font-family:"Tinos","Times New Roman",serif; font-size:18px; line-height:1; color:#9A9792;
   padding:10px 0 6px; position:sticky; top:0; background:var(--notes); z-index:1;
 }
-
-/* editor */
 .note-form{ padding:18px 20px 14px; display:flex; flex-direction:column; gap:12px; }
-.note-form .row{ display:flex; gap:8px; }
-
+.note-form .row{ display:flex; gap:8px; flex-wrap:wrap; }
 .note-title{
   border:0; outline:none; background:transparent;
   font-family:"Tinos","Times New Roman",serif; font-weight:700; font-size:44px; line-height:1.1; color:#0F3524; padding:4px 0 2px;
 }
 .note-title::placeholder{ color:#0F3524; opacity:1; }
-
 .note-page{
   width:90px; border:0; outline:none; background:transparent;
-  font-family:"Tinos","Times New Roman",serif; font-size:18px; color:var(--notes-text); border-bottom:1px dashed rgba(0,0,0,.15);
+  font-family:"Tinos","Times New Roman",serif; font-size:18px; color:var(--notes-text);
+  border-bottom:1px dashed rgba(0,0,0,.15);
 }
-
 .note-text{
-  border:0; outline:none; resize:vertical; min-height:calc(100vh - 220px);
-  background:transparent; font-family:"Tinos","Times New Roman",serif; font-size:20px; line-height:1.6; color:var(--notes-text); padding:0; white-space:pre-wrap;
+  border:0; outline:none; resize:vertical;
+  min-height:calc(100vh - 220px);
+  background:transparent;
+  font-family:"Tinos","Times New Roman",serif;
+  font-size:20px; line-height:1.6;
+  color:var(--notes-text); padding:0; white-space:pre-wrap;
 }
 .note-text::placeholder{ color:var(--notes-text); opacity:1; }
 
-/* floating HUD for PDF */
+/* Floating page HUD */
 .page-hud{
   position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
-  padding:6px 10px; border-radius:8px; background:rgba(0,0,0,.6); color:#fff;
-  font-family:"Times New Roman", Tinos, serif; font-size:14px; line-height:1; z-index:1000; pointer-events:none;
+  padding:6px 10px; border-radius:8px;
+  background:rgba(0,0,0,.6); color:#fff;
+  font-family:"Times New Roman", Tinos, serif; font-size:14px; line-height:1;
+  z-index:1000; pointer-events:none;
 }
 
-/* hide any leftover Ask-AI heading */
-.askai-head{ display:none !important; }
-
-/* ------------------------------------------------------------------------- */
-/* TOOLBAR (adds only; keeps your existing sizing & layout)                  */
-/* ------------------------------------------------------------------------- */
-
-/* Place tools in the center lane; row already 46px high */
-.topbar .bar-inner{
-  display:flex; align-items:center; gap:10px; justify-content:flex-start;
+/* Responsive */
+@media (max-width: 980px){
+  .reader-shell{
+    grid-template-columns: 1fr; grid-template-rows: 46px auto auto;
+  }
+  .topbar{ grid-column:1; }
+  .askai{ grid-column:1; grid-row:auto; min-height:160px; }
+  .book-area{ grid-column:1; }
+  .notes{ grid-column:1; }
+  .notes.expanded{ grid-column:1; }
+  .page-hud{ bottom:10px; }
+  .note-title{ font-size:34px; }
 }
-
-/* Single, conflict-free definition for the circular tokens */
-.tool-btn{
-  width:50px; height:50px;
-  display:inline-flex; align-items:center; justify-content:center;
-  border-radius:50%;
-  background:#BEB8B2;                 /* token face to match mock */
-  border:2px solid #463F3F;            /* dark ring */
-  box-shadow:0 2px 6px rgba(0,0,0,.35);
-  padding:6px; cursor:pointer; user-select:none;
-}
-.tool-btn img, .tool-btn svg{ width:100%; height:100%; display:block; }
-.tool-btn:active{ transform:translateY(1px); }
-.tool-btn.active{ outline:3px solid rgba(0,54,29,.35); outline-offset:2px; }
-
-/* Cursors when tools are active */
-.pdf-scroll.textbox-mode,
-.pdf-scroll.highlight-mode,
-.pdf-scroll.draw-mode{ cursor:crosshair; }
-
-/* ------------------------------------------------------------------------- */
-/* PAGE OVERLAYS (adds only)                                                 */
-/* ------------------------------------------------------------------------- */
-
-/* Each rendered PDF page becomes the positioning context for overlays */
-.pdf-page{ position:relative; }
-
-/* Overlay container for drawings/text boxes */
-.pdf-page .overlay-layer{ position:absolute; inset:0; pointer-events:none; }
-.pdf-page .draw-canvas{ position:absolute; inset:0; pointer-events:auto; }
-
-/* Text boxes placed on PDF pages (unchanged look; kept from your file) */
-.pdf-page .textbox{
-  position:absolute;
-  background:#fffbe6;
-  border:1px solid rgba(0,0,0,.25);
-  border-radius:4px;
-  padding:6px 8px;
-  box-shadow:0 2px 6px rgba(0,0,0,.15);
-  font-family:"Tinos","Times New Roman",serif;
-  font-size:16px; line-height:1.35; color:#463F3F;
-  min-width:120px; min-height:48px; outline:none;
-}
-
-/* Optional: visual hint colors for highlighter/drawer previews */
-.ink-preview.highlighter{ background: var(--ink-highlighter); }
-.ink-preview.drawer{ border-color: var(--ink-pen); }
-
-/* --- Topbar tools (smaller, aligned) --- */
-.topbar .bar-inner {
-  display: flex;
-  align-items: center;   /* vertical centering */
-  gap: 6px;
-  height: 100%;
-  justify-content: flex-start;
-  padding-left: 4px;     /* small left buffer */
-}
-
-.tool-btn {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: #BEB8B2;
-  border: 2px solid #463F3F;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
-  padding: 0;
-  cursor: pointer;
-  user-select: none;
-}
-
-.tool-btn img {
-  width: 110%;   /* fill more of the circle */
-  height: 110%;
-  object-fit: contain;
-  display: block;
-}
-
-.tool-btn.active {
-  outline: 3px solid rgba(0,54,29,.35);
+@media (max-width: 520px){
+  .tool-btn{ width:36px; height:36px; }
+  .ai-input{ width:220px; }
+  .note-title{ font-size:28px; }
+  .note-text{ font-size:18px; }
 }
