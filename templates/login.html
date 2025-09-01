@@ -33,7 +33,7 @@
       />
 
       <div class="password-row">
-        <input type="password" name="password" placeholder="Password" required />
+        <input id="password" type="password" name="password" placeholder="Password" required />
         <button type="submit" class="submit-btn">
           <img src="{{ url_for('static', filename='img/arrow.png') }}" alt="Submit" />
         </button>
@@ -42,7 +42,28 @@
       <div class="register-link">
         <a href="/register">Register</a>
       </div>
+
+      <!-- Moved below Register link as requested -->
+      <div class="password-options">
+        <label class="show-pass">
+          <input type="checkbox" id="togglePass" />
+          <span>Show password</span>
+        </label>
+      </div>
     </form>
   </div>
+
+  <script>
+    (function(){
+      const cb = document.getElementById('togglePass');
+      const pw = document.getElementById('password');
+      if (cb && pw){
+        cb.addEventListener('change', () => {
+          // This only toggles the input type, it does NOT change size or font.
+          pw.type = cb.checked ? 'text' : 'password';
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

@@ -15,26 +15,28 @@
 
   <div class="reader-shell">
     <!-- Top bar only across the middle reader column, no title text -->
-    <header class="topbar">
-      <div class="bar-inner">
-        <!-- Tools -->
-        <button id="btnTextBox" class="tool-btn" title="Text box">
-          <img src="{{ url_for('static', filename='img/text_box.png') }}" alt="T">
-        </button>
-        <button id="btnHighlighter" class="tool-btn" title="Highlighter">
-          <img src="{{ url_for('static', filename='img/highlighter.png') }}" alt="Highlighter">
-        </button>
-        <button id="btnDrawer" class="tool-btn" title="Thin pen">
-          <img src="{{ url_for('static', filename='img/drawer.png') }}" alt="Pen">
-        </button>
-      </div>
-    </header>
+<header class="topbar">
+  <div class="bar-inner">
+    <!-- leave implicit space for exit button at far left -->
+    <button id="btnTextBox" class="tool-btn" title="Text box">
+      <img src="{{ url_for('static', filename='img/text_box.png') }}" alt="T">
+    </button>
+    <button id="btnHighlighter" class="tool-btn" title="Highlighter">
+      <img src="{{ url_for('static', filename='img/highlighter.png') }}" alt="Highlighter">
+    </button>
+    <button id="btnDrawer" class="tool-btn" title="Thin pen">
+      <img src="{{ url_for('static', filename='img/drawer.png') }}" alt="Pen">
+    </button>
+  </div>
+</header>
 
     <div class="layout">
       <!-- Ask AI (left quarter) -->
       <aside class="askai">
+        <!-- response area stays transparent; pushed down so it never hides under exit -->
         <pre id="aiOut" class="ai-out"></pre>
 
+        <!-- locked input at bottom-left -->
         <form id="aiForm" class="ai-form">
           <div class="ai-input">
             <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
@@ -45,34 +47,52 @@
         </form>
       </aside>
 
-      {% if file_url %}
-      <!-- Middle half: digital reader -->
-      <main class="book-area with-file">
-        <div id="pdfScroll" class="pdf-scroll">
-          <div id="pdfPages" class="pdf-pages"></div>
+{% if file_url %}
+  <!-- Middle half: digital reader -->
+  <main class="book-area with-file" data-tool="none">
+    <div
+      id="pdfScroll"
+      class="pdf-scroll"
+      data-ink-color="#0F3524"
+      data-ink-opacity="0.15"   <!-- fixed highlighter opacity -->
+      data-pen-color="#123E2A"  <!-- drawer pen -->
+    >
+      <div id="pdfPages" class="pdf-pages"></div>
+
+      <!-- Templates for per-page overlays and text boxes (cloned by JS) -->
+      <template id="tplOverlay">
+        <div class="overlay-layer">
+          <canvas class="draw-canvas" data-page=""></canvas>
         </div>
-        <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-          <label>
-            Page
-            <input id="pageInput" type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
-            {% if total_pages %}/ {{ total_pages }}{% endif %}
-          </label>
-          <button class="btn-save" type="submit">Save</button>
-        </form>
-      </main>
-      {% else %}
-      <!-- Middle half: physical book info -->
-      <main class="book-area no-file">
-        <div class="no-file-msg">
-          <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
-          <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
-          <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
-            <label>Page <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
-            <button class="btn-save" type="submit">Save</button>
-          </form>
-        </div>
-      </main>
-      {% endif %}
+      </template>
+
+      <template id="tplTextbox">
+        <div class="textbox" contenteditable="true" spellcheck="false"></div>
+      </template>
+    </div>
+
+    <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
+      <label>
+        Page
+        <input id="pageInput" type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric">
+        {% if total_pages %}/ {{ total_pages }}{% endif %}
+      </label>
+      <button class="btn-save" type="submit">Save</button>
+    </form>
+  </main>
+{% else %}
+  <!-- Middle half: physical book info -->
+  <main class="book-area no-file">
+    <div class="no-file-msg">
+      <img class="cover-preview" src="{{ cover_url }}" alt="Cover">
+      <p>This is a <b>Physical</b> book. Use the Notes pane to record pages and thoughts.</p>
+      <form class="progress-bar" method="post" action="{{ url_for('update_progress', book_id=book.id) }}">
+        <label>Page <input type="number" name="page" min="0" value="{{ current_page or 0 }}" inputmode="numeric"></label>
+        <button class="btn-save" type="submit">Save</button>
+      </form>
+    </div>
+  </main>
+{% endif %}
 
       <!-- Notes (right quarter) -->
       <aside class="notes{% if not file_url %} expanded{% endif %}">
@@ -80,6 +100,7 @@
           Page {{ current_page or 0 }}
         </div>
 
+        <!-- No “Add note” button; we upsert on page switch and manual autosave -->
         <form id="noteForm" class="note-form" method="post" action="{{ url_for('add_note', book_id=book.id) }}">
           <div class="row">
             <input class="note-title" type="text" name="title" placeholder="Title">
@@ -88,6 +109,8 @@
           </div>
           <textarea class="note-text" name="text" rows="6" placeholder="Enter text from here."></textarea>
         </form>
+
+        <!-- No list — notes are per page and loaded in place -->
       </aside>
     </div>
   </div>
@@ -112,10 +135,11 @@
       });
     })();
 
+    // Helpers shared by PDF + Notes
     function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
     {% if file_url %}
-    // PDF.js viewer + tools + autosave
+    // PDF.js viewer + progress autosave + note page binding
     (function(){
       const pdfjsLib = window['pdfjs-dist/build/pdf'];
       pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -125,11 +149,6 @@
       const scrollEl  = document.getElementById('pdfScroll');
       const hud       = document.getElementById('pageHud');
       const pageInput = document.getElementById('pageInput');
-
-      // Tool buttons
-      const btnText   = document.getElementById('btnTextBox');
-      const btnHigh   = document.getElementById('btnHighlighter');
-      const btnDraw   = document.getElementById('btnDrawer');
 
       // Notes form refs
       const noteForm = document.getElementById('noteForm');
@@ -146,36 +165,11 @@
       let noteDirty = false;
       let activeNotePage = current || 0;
 
-      // Tool state
-      let activeTool = null; // 'textbox' | 'highlighter' | 'drawer'
-      const COLORS = {
-        highlighter: '#0F352466', // 40% opacity
-        drawer: '#123E2A'         // solid thin marker
-      };
-      const WIDTHS = {
-        highlighter: 16,
-        drawer: 3
-      };
-
-      function setTool(tool){
-        activeTool = (activeTool === tool) ? null : tool;
-        // classes
-        btnText.classList.toggle('active', activeTool === 'textbox');
-        btnHigh.classList.toggle('active', activeTool === 'highlighter');
-        btnDraw.classList.toggle('active', activeTool === 'drawer');
-        scrollEl.classList.toggle('textbox-mode', activeTool === 'textbox');
-        scrollEl.classList.toggle('highlight-mode', activeTool === 'highlighter');
-        scrollEl.classList.toggle('draw-mode', activeTool === 'drawer');
-      }
-      btnText.addEventListener('click', ()=> setTool('textbox'));
-      btnHigh.addEventListener('click', ()=> setTool('highlighter'));
-      btnDraw.addEventListener('click', ()=> setTool('drawer'));
-
       function hudSet(p, t){ hud.textContent = t ? (p + ' / ' + t) : (String(p) + ' / –'); }
       function setLabel(p){ if (pageLabel){ pageLabel.textContent = 'Page ' + p; } }
       function setNotePage(p){ notePage.value = p; setLabel(p); }
 
-      // NOTES: load & save per page
+      // ---- NOTES: load & save per page ----
       async function loadNoteFor(page){
         try{
           const q = new URLSearchParams({ page: String(page) });
@@ -195,9 +189,15 @@
       async function saveNoteFor(page){
         if (!noteDirty) return;
         try{
-          const payload = { page, title: noteTitle.value || '', text: noteText.value || '' };
+          const payload = {
+            page: page,
+            title: noteTitle.value || '',
+            text:  noteText.value  || ''
+          };
           await fetch(`/api/books/{{ book.id }}/notes/upsert_by_page`, {
-            method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify(payload)
           });
           noteDirty = false;
         }catch(_){}
@@ -206,13 +206,14 @@
       noteTitle.addEventListener('input', ()=>{ noteDirty = true; });
       noteText .addEventListener('input', ()=>{ noteDirty = true; });
 
-      // PROGRESS
+      // ---- PROGRESS: save + drive notes binding ----
       async function postProgress(p, t){
         if (posting) return;
         posting = true;
         try{
           await fetch(`/api/books/{{ book.id }}/progress`, {
-            method: 'POST', headers: {'Content-Type':'application/json'},
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
             body: JSON.stringify({page: p, total: t})
           });
         }catch(_){}
@@ -240,18 +241,17 @@
       async function onScroll(){
         const p = visiblePage();
         if (p !== current){
+          // save note for previous page (if dirty) BEFORE switching
           await saveNoteFor(activeNotePage);
           current = p;
           hudSet(current, total);
           if (pageInput) pageInput.value = current;
           postDebounced(current, total);
+          // load note for the new page
           await loadNoteFor(current);
-          await loadBoxesFor(current);
-          await loadStrokesFor(current);
         }
       }
 
-      // ---- Rendering ----
       function pageContainer(num){
         const wrap = document.createElement('div');
         wrap.className = 'pdf-page';
@@ -267,229 +267,20 @@
         canvas.style.width = '100%';
         canvas.style.height = 'auto';
         wrap.appendChild(canvas);
-
-        // overlay for text boxes
-        const overlay = document.createElement('div');
-        overlay.className = 'overlay-layer';
-        wrap.appendChild(overlay);
-
-        // drawing canvas
-        const draw = document.createElement('canvas');
-        draw.className = 'draw-canvas';
-        wrap.appendChild(draw);
-
-        return {wrap, canvas, overlay, draw};
-      }
-
-      function resizeDrawCanvas(draw, baseCanvas){
-        const rect = baseCanvas.getBoundingClientRect();
-        // set actual pixel size = CSS size * devicePixelRatio
-        const dpr = window.devicePixelRatio || 1;
-        draw.style.width  = rect.width + 'px';
-        draw.style.height = rect.height + 'px';
-        draw.width  = Math.floor(rect.width  * dpr);
-        draw.height = Math.floor(rect.height * dpr);
-        const ctx = draw.getContext('2d');
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // scale so 1 unit = 1 CSS pixel
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        return ctx;
+        return {wrap, canvas};
       }
 
       function renderPage(num){
         return pdf.getPage(num).then(page => {
-          const {wrap, canvas, overlay, draw} = pageContainer(num);
+          const {wrap, canvas} = pageContainer(num);
           pagesHost.appendChild(wrap);
           const viewport = page.getViewport({ scale: 1.5 });
           const context = canvas.getContext('2d');
           canvas.height = viewport.height;
           canvas.width  = viewport.width;
           console.log(`Loaded PDF with ${pdf.numPages} pages`);
-          const promise = page.render({canvasContext: context, viewport}).promise;
-          // after render, size drawing canvas and wire events
-          promise.then(() => {
-            const ctx = resizeDrawCanvas(draw, canvas);
-            wireDrawing(draw, ctx, wrap, num);
-            wireTextBoxPlacement(overlay, wrap, num);
-          });
-          return promise;
+          return page.render({canvasContext: context, viewport}).promise;
         });
-      }
-
-      // ---- Text boxes (create, load, edit) ----
-      function makeTextboxEl(box, wrap, pageNum){
-        const el = document.createElement('div');
-        el.className = 'textbox';
-        el.contentEditable = 'true';
-        el.textContent = box.text || '';
-        positionTextbox(el, box, wrap);
-        el.addEventListener('blur', async ()=>{
-          const rect = wrap.getBoundingClientRect();
-          const tb   = el.getBoundingClientRect();
-          const nx = (tb.left - rect.left) / rect.width;
-          const ny = (tb.top  - rect.top ) / rect.height;
-          const nw = tb.width / rect.width;
-          const nh = tb.height/ rect.height;
-          await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${box.id}`, {
-            method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ text: el.textContent || '', x:nx, y:ny, w:nw, h:nh })
-          });
-        });
-        // allow dragging by mouse
-        let dragging=false, sx=0, sy=0, ox=0, oy=0;
-        el.addEventListener('mousedown', (e)=>{
-          dragging=true; sx=e.clientX; sy=e.clientY;
-          const r = el.getBoundingClientRect(); const pr = wrap.getBoundingClientRect();
-          ox = r.left - pr.left; oy = r.top - pr.top;
-          e.preventDefault();
-        });
-        window.addEventListener('mousemove', (e)=>{
-          if (!dragging) return;
-          const nx = Math.max(0, Math.min(ox + (e.clientX - sx), wrap.clientWidth - el.offsetWidth));
-          const ny = Math.max(0, Math.min(oy + (e.clientY - sy), wrap.clientHeight- el.offsetHeight));
-          el.style.left = nx + 'px'; el.style.top = ny + 'px';
-        });
-        window.addEventListener('mouseup', async ()=>{
-          if (!dragging) return; dragging=false;
-          // save new pos
-          const pr = wrap.getBoundingClientRect();
-          const r  = el.getBoundingClientRect();
-          const nx = (r.left - pr.left)/pr.width;
-          const ny = (r.top  - pr.top )/pr.height;
-          await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${box.id}`, {
-            method:'PUT', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ x:nx, y:ny })
-          });
-        });
-        return el;
-      }
-
-      function positionTextbox(el, box, wrap){
-        const W = wrap.clientWidth, H = wrap.clientHeight;
-        el.style.left = (box.x * W) + 'px';
-        el.style.top  = (box.y * H) + 'px';
-        el.style.width  = (box.w * W) + 'px';
-        el.style.height = (box.h * H) + 'px';
-      }
-
-      async function loadBoxesFor(pageNum){
-        const host = pagesHost.querySelector(`.pdf-page[data-page="${pageNum}"]`);
-        if (!host) return;
-        const overlay = host.querySelector('.overlay-layer');
-        overlay.innerHTML = '';
-        try{
-          const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`);
-          const data = await res.json();
-          if (!data.ok) return;
-          data.boxes.forEach(b => {
-            const el = makeTextboxEl(b, host, pageNum);
-            host.appendChild(el);
-          });
-        }catch(_){}
-      }
-
-      function wireTextBoxPlacement(overlay, wrap, pageNum){
-        overlay.addEventListener('click', async (e)=>{
-          if (activeTool !== 'textbox') return;
-          const r = wrap.getBoundingClientRect();
-          const x = (e.clientX - r.left) / r.width;
-          const y = (e.clientY - r.top ) / r.height;
-          try{
-            const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`, {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ x, y, w:0.25, h:0.12, text:"" })
-            });
-            const data = await res.json();
-            if (data.ok){
-              await loadBoxesFor(pageNum);
-            }
-          }catch(_){}
-        }, { passive:true });
-      }
-
-      // ---- Freehand drawing (highlighter + drawer) ----
-      function wireDrawing(canvas, ctx, wrap, pageNum){
-        let drawing = false;
-        let points = [];
-
-        function start(e){
-          if (activeTool !== 'highlighter' && activeTool !== 'drawer') return;
-          drawing = true; points = [];
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.strokeStyle = COLORS[activeTool];
-          ctx.lineWidth   = WIDTHS[activeTool];
-          const p = getPoint(e, canvas, wrap);
-          points.push(p); ctx.beginPath(); ctx.moveTo(p.x, p.y);
-        }
-        function move(e){
-          if (!drawing) return;
-          const p = getPoint(e, canvas, wrap);
-          points.push(p);
-          ctx.lineTo(p.x, p.y); ctx.stroke();
-        }
-        async function end(){
-          if (!drawing) return; drawing=false;
-          // Normalize points to 0..1 relative to wrap size (CSS pixels)
-          const pr = wrap.getBoundingClientRect();
-          const norm = points.map(pt => ({ x: pt.x / pr.width, y: pt.y / pr.height }));
-          try{
-            await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`, {
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({
-                tool: activeTool,
-                width: WIDTHS[activeTool],
-                color: COLORS[activeTool],
-                points: JSON.stringify(norm)
-              })
-            });
-          }catch(_){}
-        }
-
-        canvas.addEventListener('mousedown', start);
-        window.addEventListener('mousemove', move);
-        window.addEventListener('mouseup', end);
-
-        // touch
-        canvas.addEventListener('touchstart', (e)=>{ start(e.touches[0]); e.preventDefault(); }, {passive:false});
-        canvas.addEventListener('touchmove',  (e)=>{ move(e.touches[0]);  e.preventDefault(); }, {passive:false});
-        canvas.addEventListener('touchend',   (e)=>{ end(); e.preventDefault(); }, {passive:false});
-      }
-
-      function getPoint(e, canvas, wrap){
-        const r = wrap.getBoundingClientRect();
-        const x = (e.clientX - r.left);
-        const y = (e.clientY - r.top );
-        return {x, y};
-      }
-
-      async function loadStrokesFor(pageNum){
-        const host = pagesHost.querySelector(`.pdf-page[data-page="${pageNum}"]`);
-        if (!host) return;
-        const base = host.querySelector('canvas'); // pdf page canvas
-        const draw = host.querySelector('.draw-canvas');
-        const ctx = draw.getContext('2d');
-        // clear and resize to current base size
-        resizeDrawCanvas(draw, base);
-        ctx.clearRect(0,0,draw.width,draw.height);
-        try{
-          const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`);
-          const data = await res.json();
-          if (!data.ok) return;
-          const pr = host.getBoundingClientRect();
-          data.strokes.forEach(s => {
-            ctx.strokeStyle = s.color || '#0F352466';
-            ctx.lineWidth   = s.width || 8;
-            let pts = [];
-            try{ pts = JSON.parse(s.points || '[]'); }catch(_){ pts = []; }
-            if (pts.length < 2) return;
-            ctx.beginPath();
-            ctx.moveTo(pts[0].x * pr.width, pts[0].y * pr.height);
-            for (let i=1;i<pts.length;i++){
-              ctx.lineTo(pts[i].x * pr.width, pts[i].y * pr.height);
-            }
-            ctx.stroke();
-          });
-        }catch(_){}
       }
 
       // Init
@@ -499,20 +290,21 @@
         total = pdf.numPages;
         hudSet(current || 1, total);
 
+        // render sequentially to keep memory sane
         for (let i = 1; i <= pdf.numPages; i++){
           /* eslint-disable no-await-in-loop */
           await renderPage(i);
         }
 
+        // scroll to last saved page if any
         const target = pagesHost.querySelector(`.pdf-page[data-page="${current || 1}"]`);
         if (target){
           const top = target.offsetTop - 24;
           scrollEl.scrollTo({ top, behavior: 'auto' });
         }
 
+        // Load note for initial page
         await loadNoteFor(current || 1);
-        await loadBoxesFor(current || 1);
-        await loadStrokesFor(current || 1);
 
         scrollEl.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', debounce(onScroll, 150));
@@ -534,6 +326,7 @@
       pageIn.addEventListener('change', async ()=>{
         const p = parseInt(pageIn.value || '0', 10) || 0;
         setLabel(p);
+        // Load the note for this manually selected page
         try{
           const q = new URLSearchParams({ page: String(p) });
           const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());

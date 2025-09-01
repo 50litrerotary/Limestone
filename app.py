@@ -753,7 +753,7 @@ def api_add_stroke(book_id, page):
     data = request.get_json(silent=True) or {}
     tool  = (data.get("tool")  or "highlighter").strip()
     width = float(data.get("width") or 8)
-    color = (data.get("color") or "#0F352466").strip()  # default 40% opacity green
+    color = (data.get("color") or "rgba(15,53,36,0.15)").strip()
     points_json = data.get("points") or "[]"
     # validate points_json basic shape
     try:

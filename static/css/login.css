@@ -169,3 +169,85 @@ body {
   padding: 6px 12px;
   cursor: pointer;
 }
+/* --- Show password toggle --- */
+.password-options{
+  width: 180px;              /* aligns with inputs */
+  text-align: left;
+  margin: 4px 0 0 35px;      /* aligns under the password row */
+  font-family: var(--font);
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+
+.show-pass{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* theme the checkbox without heavy custom UI */
+.show-pass input[type="checkbox"]{
+  inline-size: 16px;
+  block-size: 16px;
+  accent-color: var(--btn-color);  /* matches your token */
+  border-radius: 4px;               /* slightly curved edges */
+}
+/* Show password option (below Register) */
+.password-options{
+  width: 180px;           /* aligns with inputs */
+  text-align: left;
+  padding-top: 8px;       /* small spacing below Register */
+}
+
+/* Compact label + custom checkbox in your colour scheme */
+.show-pass{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font);
+  font-size: 0.8rem;      /* small text */
+  color: var(--accent-link);
+  user-select: none;
+}
+
+/* Custom checkbox: slightly curved edges, themed */
+.show-pass input[type="checkbox"]{
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;                 /* slightly curved */
+  background: var(--input-bg);
+  border: 1px solid #716868;          /* matches palette */
+  display: inline-block;
+  position: relative;
+  cursor: pointer;
+}
+
+/* Checkmark when selected */
+.show-pass input[type="checkbox"]:checked::after{
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: 2px solid var(--accent-link);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+
+/* Keep password input size & font unchanged when toggling */
+.password-row input[type="password"],
+.password-row input[type="text"]{
+  width: 180px;
+  height: 32px;
+  padding: 0.25rem 0.5rem;
+  font-size: 1rem;
+  font-family: var(--font);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border: none;
+}
