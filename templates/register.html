@@ -41,7 +41,7 @@
 
       <!-- Password + Submit -->
       <div class="password-row">
-        <input type="password" name="password" placeholder="Password" required />
+        <input id="password" type="password" name="password" placeholder="Password" required />
         <button type="submit" class="submit-btn">
           <img src="{{ url_for('static', filename='img/arrow.png') }}" alt="Submit" />
         </button>
@@ -55,7 +55,27 @@
       <div class="register-link">
         <a href="/login">Back to Login</a>
       </div>
+
+      <!-- Show Password Option -->
+      <div class="password-options" style="margin-top:8px; font-size:0.85rem; text-align:left; width:180px;">
+        <label class="show-pass" style="display:flex; align-items:center; gap:6px; color:#4d5a4d;">
+          <input type="checkbox" id="togglePass" style="accent-color:#5a5032; border-radius:4px;">
+          Show password
+        </label>
+      </div>
     </form>
   </div>
+
+  <script>
+    (function(){
+      const cb = document.getElementById('togglePass');
+      const pw = document.getElementById('password');
+      if (cb && pw){
+        cb.addEventListener('change', () => {
+          pw.type = cb.checked ? 'text' : 'password';
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
