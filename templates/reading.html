@@ -431,9 +431,19 @@
         state.undo.set(page, []);
       }
 
-      // Bind footer controls
-      btnUndo?.addEventListener('click', doUndo);
-      btnClear?.addEventListener('click', clearPage);
+      // --- Footer controls: Undo + Clear ---
+      if (btnUndo) {
+        btnUndo.addEventListener('click', (e)=>{
+          e.preventDefault();
+          doUndo();
+        });
+      }
+      if (btnClear) {
+        btnClear.addEventListener('click', async (e)=>{
+          e.preventDefault();
+          await clearPage();
+        });
+      }
 
       function enableBoxEditing(boxEl, pageNum, annId){
         // Keep text inside: scroll, no auto-grow
