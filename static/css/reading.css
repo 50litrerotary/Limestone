@@ -8,11 +8,8 @@
   --text:#463F3F;
   --accent:#00361D;
 
-  /* Ink colors + (optional) widths for JS to read */
-  --ink-highlighter: rgba(15,53,36,.25); /* even 25% */
+  --ink-highlighter: rgba(15,53,36,.25);
   --ink-pen: #123E2A;
-  --ink-highlighter-width: 20px; /* optional hint for JS */
-  --ink-pen-width: 3px;          /* optional hint for JS */
 }
 
 /* Base */
@@ -22,7 +19,7 @@
 html,body{ height:100%; }
 body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); background:var(--page); }
 
-/* Exit (50x50), no shadow */
+/* Exit (50x50), no shadow) */
 .exit-btn-fixed{
   position:fixed; z-index:1001; top:8px; left:8px;
   width:50px; height:50px; display:inline-flex; align-items:center; justify-content:center;
@@ -47,6 +44,7 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
   display:flex; align-items:center; gap:10px; justify-content:flex-start;
 }
 
+/* Tool tokens */
 .tool-btn{
   width:40px; height:40px;
   display:inline-flex; align-items:center; justify-content:center;
@@ -93,13 +91,13 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 
 /* Middle reader */
 .book-area{ grid-column:2; grid-row:2; display:flex; flex-direction:column; min-width:0; background:transparent; }
-.pdf-scroll{ 
-  flex:1; 
-  min-height:60vh; 
-  max-height:calc(100vh - 46px - 58px); 
-  overflow-y:auto; 
-  overflow-x:hidden;  /* hide horizontal scroll bar */
-  padding:12px 0; 
+.pdf-scroll{
+  flex:1;
+  min-height:60vh;
+  max-height:calc(100vh - 46px - 58px);
+  overflow-y:auto;
+  overflow-x:hidden;      /* remove horizontal scrollbar */
+  padding:12px 0;
 }
 .pdf-pages{ width:100%; }
 .pdf-scroll::-webkit-scrollbar{ width:10px; }
@@ -119,35 +117,43 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
 .pdf-page .overlay-layer{ position:absolute; inset:0; pointer-events:none; z-index:2; }
 .pdf-page .draw-canvas{ position:absolute; inset:0; pointer-events:auto; z-index:2; }
 
-/* Text boxes: translucent + confined content */
+/* --- Text boxes (single, non-duplicated definition) --- */
 .pdf-page .textbox{
   position:absolute;
-  min-width:120px;
-  min-height:48px;
-  /* translucent sticky-note look */
+  left:0; top:0;
+  min-width:120px; min-height:60px;
   background:rgba(255, 251, 230, 0.72);
   border:1px solid rgba(0,0,0,.25);
-  border-radius:4px;
-  padding:6px 8px;
-  box-shadow:0 2px 6px rgba(0,0,0,.15);
-
-  font-family:"Tinos","Times New Roman",serif;
-  font-size:16px;
-  line-height:1.35;
-  color:#463F3F;
-
-  outline:none;
-  pointer-events:auto;
+  border-radius:6px;
+  box-shadow:0 2px 6px rgba(0,0,0,.12);
   z-index:3;
-  user-select:text;
-
-  /* keep text inside the box */
-  overflow:auto;               /* scroll when needed */
-  white-space:pre-wrap;        /* keep line-breaks; wrap long lines */
-  word-break:break-word;       /* wrap very long words/URLs */
-  max-width:95%;               /* avoid spilling off page width */
-  max-height:85%;              /* avoid covering entire page */
+  display:flex; flex-direction:column;
+  pointer-events:auto;
+  overflow:hidden; /* keep content + handle inside rounded corners */
 }
+.pdf-page .textbox .tb-handle{
+  height:18px;
+  background:rgba(0,0,0,.08);
+  border-bottom:1px solid rgba(0,0,0,.15);
+  cursor:grab;
+  flex:0 0 auto;
+  user-select:none;
+}
+.pdf-page .textbox.dragging .tb-handle{
+  cursor:grabbing;
+  background:rgba(0,0,0,.14);
+}
+.pdf-page .textbox .tb-content{
+  padding:6px 8px;
+  font-family:"Tinos","Times New Roman",serif;
+  font-size:16px; line-height:1.35; color:#463F3F;
+  outline:none;
+  overflow:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
+  max-height:calc(100% - 18px);
+}
+
 .progress-bar{
   margin:10px auto 0;
   display:flex; gap:12px; align-items:center; justify-content:center;
@@ -159,17 +165,16 @@ body{ margin:0; font-family:"Times New Roman", Tinos, serif; color:var(--text); 
   border:1px solid #cfc6b8; background:transparent; cursor:pointer; color:#463F3F;
 }
 .btn-ghost:hover{ background:rgba(0,0,0,.04); }
-
 .progress-bar input[type="number"]{
   height:28px; width:72px; padding:4px 6px;
   font-size:14px; border-radius:6px; border:1px solid rgba(0,0,0,.15);
   background:#fff;
 }
-
 .btn-save{
   padding:6px 10px; font-size:13px; border-radius:8px;
   border:1px solid rgba(0,0,0,.15); background:#fff; cursor:pointer;
 }
+
 /* Notes pane */
 .notes{
   grid-column:3; grid-row:1 / span 2;

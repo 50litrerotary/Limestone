@@ -57,7 +57,10 @@
           </template>
 
           <template id="tplTextbox">
-            <div class="textbox" contenteditable="true" spellcheck="false"></div>
+            <div class="textbox">
+              <div class="tb-handle" title="Drag to move"></div>
+              <div class="tb-content" contenteditable="true" spellcheck="false"></div>
+            </div>
           </template>
         </div>
 
@@ -161,11 +164,11 @@
         undo: new Map()      // page -> [{kind:'stroke'|'box', id, localNode?}]
       };
 
-      // Uniform ink (constant color/opacity, marker-like ends)
+      // Ink settings: constant opacity/width; highlighter = flat bar ends
       const INK = {
-        highlighterRGBA: 'rgba(15,53,36,0.25)', // constant 25%
+        highlighterRGBA: 'rgba(15,53,36,0.25)',
         penColor: '#123E2A',
-        highlighterWidth: 20, // thicker, single-bar look
+        highlighterWidth: 20, // one-bar look
         penWidth: 3          // drawer slightly thicker
       };
 
@@ -274,15 +277,16 @@
       function ensureOverlayFor(pageDiv, pageNum){
         if (state.overlays.has(pageNum)) return state.overlays.get(pageNum);
         const frag = tplOverlay.content.cloneNode(true);
-        const layer = frag.querySelector('.overlay-layer');
+        const layer  = frag.querySelector('.overlay-layer');
         const canvas = frag.querySelector('.draw-canvas');
         canvas.dataset.page = String(pageNum);
         pageDiv.appendChild(frag);
+
         const ctx = canvas.getContext('2d');
-        const entry = { layer, canvas, ctx, w: 0, h: 0, pageDiv };
+        const entry = { layer, canvas, ctx, w:0, h:0, pageDiv };
         state.overlays.set(pageNum, entry);
 
-        // Drawing
+        // ------ Freehand drawing (hi/drawer) ------
         let drawing = false;
         let last = null;
         let points = [];
@@ -295,17 +299,17 @@
 
         function strokeSegment(from, to){
           const isHi = (state.tool === TOOL.HIGHLIGHT);
-          const ctx  = entry.ctx;
-          ctx.lineCap   = isHi ? 'butt' : 'round';     // marker bar vs round pen
-          ctx.lineJoin  = 'round';
-          ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
-          ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
-          ctx.globalAlpha = 1;
-          ctx.globalCompositeOperation = 'source-over';
-          ctx.beginPath();
-          ctx.moveTo(from.x, from.y);
-          ctx.lineTo(to.x, to.y);
-          ctx.stroke();
+          const c = entry.ctx;
+          c.lineCap = isHi ? 'butt' : 'round'; // marker bar vs pen
+          c.lineJoin = 'round';
+          c.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
+          c.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
+          c.globalAlpha = 1;
+          c.globalCompositeOperation = 'source-over';
+          c.beginPath();
+          c.moveTo(from.x, from.y);
+          c.lineTo(to.x, to.y);
+          c.stroke();
         }
 
         canvas.addEventListener('mousedown', (e)=>{
@@ -328,7 +332,7 @@
               points: JSON.stringify(points)
             };
             try{
-              const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`, {
+              const res  = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/strokes`, {
                 method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
               });
               const data = await res.json();
@@ -337,36 +341,36 @@
           }
         });
 
-        // Click-to-place textbox
+        // ------ Click to add textbox ------
         pageDiv.addEventListener('click', async (e)=>{
           if (state.tool !== TOOL.BOX) return;
-          // Ignore clicks on existing boxes (so you can edit them)
-          if (e.target.closest('.textbox')) return;
+
+          // Don’t spawn a new box when clicking an existing one or its handle
+          const existing = e.target.closest('.textbox');
+          if (existing || e.target.closest('.tb-handle') || (existing && existing.dataset.dragging)) return;
 
           const r = pageDiv.getBoundingClientRect();
           const x = (e.clientX - r.left) / r.width;
           const y = (e.clientY - r.top)  / r.height;
 
-          // Create DOM box immediately, with constrained size
-          const box = tplTextbox.content.firstElementChild.cloneNode(true);
+          const box  = tplTextbox.content.firstElementChild.cloneNode(true);
           const wPct = 0.25, hPct = 0.12;
-          box.style.left = (x * 100) + '%';
-          box.style.top  = (y * 100) + '%';
-          box.style.width  = (wPct * 100) + '%';
-          box.style.height = (hPct * 100) + '%';
+          box.style.left   = (x*100)+'%';
+          box.style.top    = (y*100)+'%';
+          box.style.width  = (wPct*100)+'%';
+          box.style.height = (hPct*100)+'%';
           pageDiv.appendChild(box);
-          box.focus();
 
-          // Persist box (position & initial size)
           try{
-            const res = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`,{
+            const res  = await fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes`,{
               method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ x, y, w: wPct, h: hPct, text: '' })
+              body: JSON.stringify({ x, y, w:wPct, h:hPct, text:'' })
             });
             const data = await res.json();
             if (data.ok){
               box.dataset.annId = data.id;
               enableBoxEditing(box, pageNum, data.id);
+              box.querySelector('.tb-content')?.focus();
               pushUndo(pageNum, { kind:'box', id:data.id, localNode:box });
             }else{
               box.remove();
@@ -377,7 +381,7 @@
         return entry;
       }
 
-      // Undo stack helpers
+      // --- Undo/Clear ---
       function pushUndo(page, item){
         if (!state.undo.has(page)) state.undo.set(page, []);
         state.undo.get(page).push(item);
@@ -400,93 +404,93 @@
         }
       }
 
-      // Clear page (delete everything on current page)
       async function clearPage(){
         const page = state.current || 1;
         const entry = state.overlays.get(page);
         if (!entry) return;
         try{
-          // delete strokes
           const sRes = await fetch(`/api/books/{{ book.id }}/pages/${page}/strokes`);
           const sData = await sRes.json();
           if (sData.ok){
             for (const s of sData.strokes){
-              /* eslint-disable no-await-in-loop */
               await fetch(`/api/books/{{ book.id }}/pages/${page}/strokes/${s.id}`, { method:'DELETE' });
             }
           }
-          // delete boxes
           const bRes = await fetch(`/api/books/{{ book.id }}/pages/${page}/boxes`);
           const bData = await bRes.json();
           if (bData.ok){
             for (const b of bData.boxes){
-              /* eslint-disable no-await-in-loop */
               await fetch(`/api/books/{{ book.id }}/pages/${page}/boxes/${b.id}`, { method:'DELETE' });
             }
           }
         }catch(_){}
-        // UI refresh
         await redrawStrokes(page);
         entry.pageDiv.querySelectorAll('.textbox').forEach(n=>n.remove());
-        // reset undo stack for the page
         state.undo.set(page, []);
       }
 
-      // --- Footer controls: Undo + Clear ---
-      if (btnUndo) {
-        btnUndo.addEventListener('click', (e)=>{
-          e.preventDefault();
-          doUndo();
-        });
-      }
-      if (btnClear) {
-        btnClear.addEventListener('click', async (e)=>{
-          e.preventDefault();
-          await clearPage();
-        });
-      }
+      if (btnUndo)  btnUndo.addEventListener('click', (e)=>{ e.preventDefault(); doUndo(); });
+      if (btnClear) btnClear.addEventListener('click', async (e)=>{ e.preventDefault(); await clearPage(); });
 
+      // --- Textbox editing/dragging (handle + optional Alt-drag anywhere) ---
       function enableBoxEditing(boxEl, pageNum, annId){
-        // Keep text inside; save on debounce/blur
+        const contentEl = boxEl.querySelector('.tb-content');
+        const handleEl  = boxEl.querySelector('.tb-handle');
+
+        // Save text (debounced + blur)
         let t;
-        function save(){
-          const text = boxEl.innerText || '';
+        function saveText(){
+          const text = contentEl.innerText || '';
           fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${annId}`, {
             method:'PUT', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ text })
           }).catch(()=>{});
         }
-        boxEl.addEventListener('input', ()=>{ clearTimeout(t); t = setTimeout(save, 300); });
-        boxEl.addEventListener('blur', save);
+        contentEl.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(saveText,300); });
+        contentEl.addEventListener('blur', saveText);
 
-        // Drag move (only while box tool active)
-        let dragging=false, ox=0, oy=0, startL=0, startT=0;
-        boxEl.addEventListener('mousedown', (e)=>{
-          if (state.tool !== TOOL.BOX) return;
-          dragging=true; e.preventDefault();
-          const r = boxEl.getBoundingClientRect();
-          ox=e.clientX; oy=e.clientY; startL=r.left; startT=r.top;
-        });
-        window.addEventListener('mousemove', (e)=>{
+        // Drag to move (handle, or Alt/Option anywhere on the box)
+        let dragging=false, start={x:0,y:0}, startRect=null, parentRect=null;
+
+        function startDrag(e){
+          const allow = e.target === handleEl || e.altKey;
+          if (!allow || e.button !== 0) return;
+          e.preventDefault(); e.stopPropagation();
+          dragging=true; boxEl.classList.add('dragging'); document.body.style.userSelect='none';
+          parentRect = boxEl.parentElement.getBoundingClientRect();
+          startRect  = boxEl.getBoundingClientRect();
+          start.x = e.clientX; start.y = e.clientY;
+          boxEl.dataset.dragging = '1';
+        }
+        function onMove(e){
           if (!dragging) return;
-          const dx = e.clientX - ox, dy = e.clientY - oy;
-          const parent = boxEl.parentElement.getBoundingClientRect();
-          const nx = (startL + dx - parent.left)/parent.width;
-          const ny = (startT + dy - parent.top)/parent.height;
-          boxEl.style.left = Math.max(0, Math.min(0.98, nx))*100 + '%';
-          boxEl.style.top  = Math.max(0, Math.min(0.98, ny))*100 + '%';
-        });
-        window.addEventListener('mouseup', ()=>{
-          if (!dragging) return; dragging=false;
-          const parent = boxEl.parentElement.getBoundingClientRect();
+          const dx = e.clientX - start.x, dy = e.clientY - start.y;
+          const nx = (startRect.left + dx - parentRect.left) / parentRect.width;
+          const ny = (startRect.top  + dy - parentRect.top ) / parentRect.height;
+          const clampedX = Math.max(0, Math.min(0.98, nx));
+          const clampedY = Math.max(0, Math.min(0.98, ny));
+          boxEl.style.left = (clampedX*100)+'%';
+          boxEl.style.top  = (clampedY*100)+'%';
+        }
+        function endDrag(){
+          if (!dragging) return;
+          dragging=false; boxEl.classList.remove('dragging'); document.body.style.userSelect='';
+          setTimeout(()=>{ delete boxEl.dataset.dragging; }, 0);
+          // persist final position
           const r = boxEl.getBoundingClientRect();
-          const nx = (r.left - parent.left) / parent.width;
-          const ny = (r.top  - parent.top ) / parent.height;
+          const p = boxEl.parentElement.getBoundingClientRect();
+          const nx = (r.left - p.left) / p.width;
+          const ny = (r.top  - p.top ) / p.height;
           fetch(`/api/books/{{ book.id }}/pages/${pageNum}/boxes/${annId}`, {
             method:'PUT', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({ x:nx, y:ny })
           }).catch(()=>{});
-        });
+        }
+
+        handleEl.addEventListener('mousedown', startDrag);
+        boxEl.addEventListener('mousedown', (e)=>{ if (e.altKey) startDrag(e); });
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup',   endDrag);
       }
 
       // --- Render helpers ---
@@ -506,6 +510,7 @@
         const page = await state.pdf.getPage(num);
         const {wrap, canvas} = pageContainer(num);
         pagesHost.appendChild(wrap);
+
         const viewport = page.getViewport({ scale: 1.5 });
         const ctx = canvas.getContext('2d');
         canvas.height = viewport.height;
@@ -518,7 +523,6 @@
         entry.canvas.height = canvas.height;
         entry.w = canvas.width; entry.h = canvas.height;
 
-        // Load persisted marks
         await redrawStrokes(num);
         await redrawBoxes(num, wrap);
       }
@@ -534,21 +538,21 @@
           for (const s of data.strokes){
             const pts = JSON.parse(s.points || '[]');
             const isHi = (s.tool === 'highlighter');
-            const ctx  = entry.ctx;
-            ctx.lineCap = isHi ? 'butt' : 'round';
-            ctx.lineJoin= 'round';
-            ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
-            ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
-            ctx.globalAlpha = 1;
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.beginPath();
+            const c = entry.ctx;
+            c.lineCap   = isHi ? 'butt' : 'round';
+            c.lineJoin  = 'round';
+            c.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
+            c.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
+            c.globalAlpha = 1;
+            c.globalCompositeOperation = 'source-over';
+            c.beginPath();
             for (let i=1;i<pts.length;i++){
               const p0 = { x: pts[i-1][0]*entry.w, y: pts[i-1][1]*entry.h };
               const p1 = { x: pts[i][0]*entry.w,   y: pts[i][1]*entry.h   };
-              ctx.moveTo(p0.x, p0.y);
-              ctx.lineTo(p1.x, p1.y);
+              c.moveTo(p0.x, p0.y);
+              c.lineTo(p1.x, p1.y);
             }
-            ctx.stroke();
+            c.stroke();
           }
         }catch(_){}
       }
@@ -566,7 +570,8 @@
             const w = (b.w ?? 0.25), h = (b.h ?? 0.12);
             box.style.width  = (w*100)+'%';
             box.style.height = (h*100)+'%';
-            box.textContent  = b.text || '';
+            const contentEl = box.querySelector('.tb-content');
+            if (contentEl) contentEl.textContent = b.text || '';
             box.dataset.annId = b.id;
             pageDiv.appendChild(box);
             enableBoxEditing(box, pageNum, b.id);
@@ -580,8 +585,7 @@
         state.total = state.pdf.numPages;
         hudSet(state.current || 1, state.total);
 
-        for (let i = 1; i <= state.pdf.numPages; i++){
-          /* eslint-disable no-await-in-loop */
+        for (let i=1; i<=state.pdf.numPages; i++){
           await renderPage(i);
         }
 
@@ -597,34 +601,6 @@
         window.addEventListener('resize', debounce(onScroll, 150));
 
         setTool(TOOL.NONE);
-      })();
-
-      // Manual page select in Notes pane
-      (function(){
-        const form = document.getElementById('noteForm');
-        if (!form) return;
-        const pageIn = form.querySelector('.note-page');
-        const title  = form.querySelector('.note-title');
-        const body   = form.querySelector('.note-text');
-        const label  = document.getElementById('notesPageLabel');
-        function setLabel(p){ if (label) label.textContent = 'Page ' + p; }
-
-        pageIn.addEventListener('change', async ()=>{
-          const p = parseInt(pageIn.value || '0', 10) || 0;
-          setLabel(p);
-          state.current = p;
-          hudSet(state.current, state.total);
-          try{
-            const q = new URLSearchParams({ page: String(p) });
-            const res = await fetch(`/api/books/{{ book.id }}/notes/by_page?` + q.toString());
-            const data = await res.json();
-            if (data.ok){
-              const n = data.note;
-              title.value = n ? (n.title || '') : '';
-              body.value  = n ? (n.text  || '') : '';
-            }
-          }catch(_){}
-        });
       })();
 
       // Keyboard Undo (Ctrl/Cmd+Z)
