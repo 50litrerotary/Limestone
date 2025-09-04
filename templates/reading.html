@@ -161,12 +161,12 @@
         undo: new Map()      // page -> [{kind:'stroke'|'box', id, localNode?}]
       };
 
-      // Uniform ink (no multiply halo)
+      // Uniform ink (constant color/opacity, marker-like ends)
       const INK = {
-        highlighterRGBA: 'rgba(15,53,36,0.25)', // even, consistent
+        highlighterRGBA: 'rgba(15,53,36,0.25)', // constant 25%
         penColor: '#123E2A',
-        highlighterWidth: 16,
-        penWidth: 2
+        highlighterWidth: 20, // thicker, single-bar look
+        penWidth: 3          // drawer slightly thicker
       };
 
       // --- Toolbar (mode selection) ---
@@ -293,6 +293,21 @@
         }
         function pushPoint(pt){ points.push([pt.x/entry.w, pt.y/entry.h]); }
 
+        function strokeSegment(from, to){
+          const isHi = (state.tool === TOOL.HIGHLIGHT);
+          const ctx  = entry.ctx;
+          ctx.lineCap   = isHi ? 'butt' : 'round';     // marker bar vs round pen
+          ctx.lineJoin  = 'round';
+          ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
+          ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.stroke();
+        }
+
         canvas.addEventListener('mousedown', (e)=>{
           if (state.tool !== TOOL.HIGHLIGHT && state.tool !== TOOL.DRAW) return;
           drawing = true; last = toCanvasXY(e); points = []; pushPoint(last); e.preventDefault();
@@ -300,23 +315,7 @@
         window.addEventListener('mousemove', (e)=>{
           if (!drawing) return;
           const cur = toCanvasXY(e);
-          entry.ctx.lineCap = 'round';
-          entry.ctx.lineJoin = 'round';
-          if (state.tool === TOOL.HIGHLIGHT){
-            entry.ctx.strokeStyle = INK.highlighterRGBA;
-            entry.ctx.lineWidth   = INK.highlighterWidth;
-            entry.ctx.globalAlpha = 1;
-            entry.ctx.globalCompositeOperation = 'source-over';
-          }else{
-            entry.ctx.strokeStyle = INK.penColor;
-            entry.ctx.lineWidth   = INK.penWidth;
-            entry.ctx.globalAlpha = 1;
-            entry.ctx.globalCompositeOperation = 'source-over';
-          }
-          entry.ctx.beginPath();
-          entry.ctx.moveTo(last.x, last.y);
-          entry.ctx.lineTo(cur.x, cur.y);
-          entry.ctx.stroke();
+          strokeSegment(last, cur);
           last = cur; pushPoint(cur);
         });
         window.addEventListener('mouseup', async ()=>{
@@ -369,8 +368,10 @@
               box.dataset.annId = data.id;
               enableBoxEditing(box, pageNum, data.id);
               pushUndo(pageNum, { kind:'box', id:data.id, localNode:box });
+            }else{
+              box.remove();
             }
-          }catch(_){}
+          }catch(_){ box.remove(); }
         });
 
         return entry;
@@ -446,8 +447,7 @@
       }
 
       function enableBoxEditing(boxEl, pageNum, annId){
-        // Keep text inside: scroll, no auto-grow
-        // Save text on debounce/blur
+        // Keep text inside; save on debounce/blur
         let t;
         function save(){
           const text = boxEl.innerText || '';
@@ -459,7 +459,7 @@
         boxEl.addEventListener('input', ()=>{ clearTimeout(t); t = setTimeout(save, 300); });
         boxEl.addEventListener('blur', save);
 
-        // Drag move (only in box tool)
+        // Drag move (only while box tool active)
         let dragging=false, ox=0, oy=0, startL=0, startT=0;
         boxEl.addEventListener('mousedown', (e)=>{
           if (state.tool !== TOOL.BOX) return;
@@ -533,20 +533,22 @@
           if (!data.ok) return;
           for (const s of data.strokes){
             const pts = JSON.parse(s.points || '[]');
-            entry.ctx.lineCap='round'; entry.ctx.lineJoin='round';
             const isHi = (s.tool === 'highlighter');
-            entry.ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
-            entry.ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
-            entry.ctx.globalAlpha = 1;
-            entry.ctx.globalCompositeOperation = 'source-over';
-            entry.ctx.beginPath();
+            const ctx  = entry.ctx;
+            ctx.lineCap = isHi ? 'butt' : 'round';
+            ctx.lineJoin= 'round';
+            ctx.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
+            ctx.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
+            ctx.globalAlpha = 1;
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.beginPath();
             for (let i=1;i<pts.length;i++){
               const p0 = { x: pts[i-1][0]*entry.w, y: pts[i-1][1]*entry.h };
               const p1 = { x: pts[i][0]*entry.w,   y: pts[i][1]*entry.h   };
-              entry.ctx.moveTo(p0.x, p0.y);
-              entry.ctx.lineTo(p1.x, p1.y);
+              ctx.moveTo(p0.x, p0.y);
+              ctx.lineTo(p1.x, p1.y);
             }
-            entry.ctx.stroke();
+            ctx.stroke();
           }
         }catch(_){}
       }
@@ -561,7 +563,6 @@
             const box = tplTextbox.content.firstElementChild.cloneNode(true);
             box.style.left   = (b.x*100)+'%';
             box.style.top    = (b.y*100)+'%';
-            // if server provided size, use it
             const w = (b.w ?? 0.25), h = (b.h ?? 0.12);
             box.style.width  = (w*100)+'%';
             box.style.height = (h*100)+'%';
@@ -579,7 +580,7 @@
         state.total = state.pdf.numPages;
         hudSet(state.current || 1, state.total);
 
-        for (let i=1; i<=state.pdf.numPages; i++){
+        for (let i = 1; i <= state.pdf.numPages; i++){
           /* eslint-disable no-await-in-loop */
           await renderPage(i);
         }
