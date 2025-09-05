@@ -8,6 +8,8 @@ from datetime import datetime
 import os
 import re
 import json
+from dotenv import load_dotenv
+load_dotenv("ask_ai.env")
 
 app = Flask(__name__)
 app.secret_key = "super-secret-key"
@@ -24,7 +26,8 @@ def _ext_ok(filename, allowed):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed
 
 # --- DB CONFIG ---
-DATABASE_URI = "mysql://limestone_user:StrongLocalPass!23@localhost/limestone"
+# IMPORTANT: use PyMySQL driver
+DATABASE_URI = "mysql+pymysql://limestone_user:StrongLocalPass!23@localhost/limestone"
 engine = create_engine(DATABASE_URI, pool_pre_ping=True, future=True)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
 Base = declarative_base()
@@ -588,12 +591,69 @@ def api_upsert_note_by_page(book_id):
     finally:
         db.close()
 
-# ---- Ask AI stub ----
+# ---- Ask AI / Cloudflare summarise ----
+import requests
+
+CF_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip()
+CF_API_TOKEN  = os.getenv("CLOUDFLARE_API_TOKEN", "").strip()
+
+def cf_summarise(text: str, model: str = "@cf/facebook/bart-large-cnn") -> str:
+    if not CF_ACCOUNT_ID or not CF_API_TOKEN:
+        return "Cloudflare credentials are missing on the server."
+
+    url = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{model}"
+    headers = {
+        "Authorization": f"Bearer {CF_API_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {"input_text": text[:15000]}
+
+    try:
+        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        data = r.json()
+        if not data.get("success"):
+            msg = (data.get("errors") or [{"message": "Unknown error"}])[0].get("message")
+            return f"Workers AI error: {msg}"
+        result = data.get("result") or {}
+        summary = result.get("summary") or result.get("text") or ""
+        return summary.strip() or "No summary returned."
+    except Exception as e:
+        return f"Request failed: {e}"
+
+@app.route('/api/summarise', methods=['POST'])
+def api_summarise():
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"ok": False, "error": "no_text"}), 400
+    summary = cf_summarise(text)
+    return jsonify({"ok": True, "summary": summary})
+
+# (Optional) keep an /api/ask_ai stub for compatibility with the old UI
+# ---- Ask AI (stub + summarise) ----
 @app.route('/api/ask_ai', methods=['POST'])
 def ask_ai():
-    q = (request.form.get('q') or '').strip()
-    return jsonify({"ok": True, "answer": "AI summary is coming soon. (Stub)\n\nQuestion: " + (q or "(empty)")})
+    if not current_user_id():
+        return jsonify({"ok": False, "error": "auth"}), 401
 
+    data = request.get_json(silent=True) or {}
+    op   = data.get("op")
+    q    = (data.get("q") or "").strip()
+    page = data.get("page")
+    text = (data.get("text") or "").strip()
+
+    # stub for text Q&A
+    if op == "ask" and q:
+        return jsonify({"ok": True, "answer": f"(Stub) You asked: {q}"})
+
+    # working summariser using Cloudflare
+    if op == "summarise" and text:
+        summary = cf_summarise(text)
+        return jsonify({"ok": True, "answer": summary})
+
+    return jsonify({"ok": False, "error": "invalid_op"}), 400
 # --- Per-page helpers --------------------------------------------------------
 def get_or_create_page_note(db, owner_id: int, book_id: int, page: int, title="Inline boxes") -> Note:
     note = (
@@ -770,7 +830,7 @@ def api_list_strokes(book_id, page):
                 "tool": meta["tool"],
                 "width": float(meta["width"] or 6),
                 "color": meta["color"] or "rgba(15,53,36,0.15)",
-                "points": a.text or "[]",  # JSON string
+                "points": a.text or "[]",
             })
         return jsonify({"ok": True, "strokes": items})
     finally:

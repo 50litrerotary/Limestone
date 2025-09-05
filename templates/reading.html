@@ -35,8 +35,9 @@
         <pre id="aiOut" class="ai-out"></pre>
         <form id="aiForm" class="ai-form">
           <div class="ai-input">
-            <input type="text" name="q" placeholder="Ask AI…" autocomplete="off">
-            <button type="submit" class="icon-btn" title="Ask">
+            <input type="text" name="q" id="aiInput" placeholder="Ask AI…" autocomplete="off">
+            <!-- Single button (search icon only) -->
+            <button type="submit" id="aiAskBtn" class="icon-btn" title="Ask or Summarise current page">
               <img src="{{ url_for('static', filename='img/search.png') }}" alt="Ask">
             </button>
           </div>
@@ -116,20 +117,60 @@
   <div id="pageHud" class="page-hud">– / –</div>
 
   <script>
-    // --- Ask AI (stub passthrough) ---
+    // ------- Ask AI: one button, two behaviors -------
     (function(){
-      const f = document.getElementById('aiForm');
+      const form = document.getElementById('aiForm');
+      const input = document.getElementById('aiInput');
       const out = document.getElementById('aiOut');
-      if (!f) return;
-      f.addEventListener('submit', async (e) => {
+      const btn = document.getElementById('aiAskBtn');
+      if (!form || !input || !out || !btn) return;
+
+      form.addEventListener('submit', async (e)=>{
         e.preventDefault();
-        const fd = new FormData(f);
+        const q = (input.value || '').trim();
+        const pageNum = (window.__readerState && window.__readerState.current) || {{ current_page or 1 }};
+
+        // If empty -> summarise current page via /api/summarise
+        if (!q){
+          out.textContent = 'Summarising page ' + pageNum + '…';
+          btn.disabled = true;
+          try{
+            const pageText = await getCurrentPageText(); // defined below
+            if (!pageText || pageText.trim().length < 5){
+              out.textContent = "Couldn't read text on this page.";
+            }else{
+              const res = await fetch('{{ url_for("api_summarise") }}', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ text: pageText })
+              });
+              const data = await res.json();
+              out.textContent = (data && data.ok) ? (data.summary || 'No summary returned.') : 'Error.';
+            }
+          }catch(_){
+            out.textContent = 'Network error.';
+          }finally{
+            btn.disabled = false;
+          }
+          return;
+        }
+
+        // Otherwise -> stub Ask via /api/ask_ai
         out.textContent = 'Thinking…';
+        btn.disabled = true;
         try{
-          const res = await fetch('{{ url_for("ask_ai") }}', { method:'POST', body:fd });
+          const res = await fetch('{{ url_for("ask_ai") }}', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ op:'ask', q })
+          });
           const data = await res.json();
-          out.textContent = data.ok ? data.answer : 'Error.';
-        }catch(_){ out.textContent = 'Error.'; }
+          out.textContent = (data && data.ok && data.answer) ? data.answer : 'Error.';
+        }catch(_){
+          out.textContent = 'Network error.';
+        }finally{
+          btn.disabled = false;
+        }
       });
     })();
 
@@ -163,13 +204,14 @@
         overlays: new Map(), // page -> { layer, canvas, ctx, w, h, pageDiv }
         undo: new Map()      // page -> [{kind:'stroke'|'box', id, localNode?}]
       };
+      // expose to Ask AI
+      window.__readerState = state;
 
-      // Ink settings: constant opacity/width; highlighter = flat bar ends
       const INK = {
         highlighterRGBA: 'rgba(15,53,36,0.25)',
         penColor: '#123E2A',
-        highlighterWidth: 20, // one-bar look
-        penWidth: 3          // drawer slightly thicker
+        highlighterWidth: 20,
+        penWidth: 3
       };
 
       // --- Toolbar (mode selection) ---
@@ -286,7 +328,7 @@
         const entry = { layer, canvas, ctx, w:0, h:0, pageDiv };
         state.overlays.set(pageNum, entry);
 
-        // ------ Freehand drawing (hi/drawer) ------
+        // ------ Freehand drawing ------
         let drawing = false;
         let last = null;
         let points = [];
@@ -300,7 +342,7 @@
         function strokeSegment(from, to){
           const isHi = (state.tool === TOOL.HIGHLIGHT);
           const c = entry.ctx;
-          c.lineCap = isHi ? 'butt' : 'round'; // marker bar vs pen
+          c.lineCap = isHi ? 'butt' : 'round';
           c.lineJoin = 'round';
           c.strokeStyle = isHi ? INK.highlighterRGBA : INK.penColor;
           c.lineWidth   = isHi ? INK.highlighterWidth : INK.penWidth;
@@ -344,8 +386,6 @@
         // ------ Click to add textbox ------
         pageDiv.addEventListener('click', async (e)=>{
           if (state.tool !== TOOL.BOX) return;
-
-          // Don’t spawn a new box when clicking an existing one or its handle
           const existing = e.target.closest('.textbox');
           if (existing || e.target.closest('.tb-handle') || (existing && existing.dataset.dragging)) return;
 
@@ -432,12 +472,11 @@
       if (btnUndo)  btnUndo.addEventListener('click', (e)=>{ e.preventDefault(); doUndo(); });
       if (btnClear) btnClear.addEventListener('click', async (e)=>{ e.preventDefault(); await clearPage(); });
 
-      // --- Textbox editing/dragging (handle + optional Alt-drag anywhere) ---
+      // --- Textbox editing/dragging ---
       function enableBoxEditing(boxEl, pageNum, annId){
         const contentEl = boxEl.querySelector('.tb-content');
         const handleEl  = boxEl.querySelector('.tb-handle');
 
-        // Save text (debounced + blur)
         let t;
         function saveText(){
           const text = contentEl.innerText || '';
@@ -449,7 +488,6 @@
         contentEl.addEventListener('input', ()=>{ clearTimeout(t); t=setTimeout(saveText,300); });
         contentEl.addEventListener('blur', saveText);
 
-        // Drag to move (handle, or Alt/Option anywhere on the box)
         let dragging=false, start={x:0,y:0}, startRect=null, parentRect=null;
 
         function startDrag(e){
@@ -476,7 +514,6 @@
           if (!dragging) return;
           dragging=false; boxEl.classList.remove('dragging'); document.body.style.userSelect='';
           setTimeout(()=>{ delete boxEl.dataset.dragging; }, 0);
-          // persist final position
           const r = boxEl.getBoundingClientRect();
           const p = boxEl.parentElement.getBoundingClientRect();
           const nx = (r.left - p.left) / p.width;
@@ -517,7 +554,6 @@
         canvas.width  = viewport.width;
         await page.render({canvasContext: ctx, viewport}).promise;
 
-        // Overlay after rendering, matching size
         const entry = ensureOverlayFor(wrap, num);
         entry.canvas.width  = canvas.width;
         entry.canvas.height = canvas.height;
@@ -610,6 +646,19 @@
           doUndo();
         }
       });
+
+      // -------- Helper: extract visible page text with PDF.js ----------
+      async function getCurrentPageText(){
+        try{
+          const p = (window.__readerState && window.__readerState.current) || 1;
+          const page = await window.__readerState.pdf.getPage(p);
+          const tc = await page.getTextContent();
+          return tc.items.map(i => i.str).join(' ');
+        }catch(_){
+          return '';
+        }
+      }
+      window.getCurrentPageText = getCurrentPageText; // expose for Ask AI handler
     })();
     {% endif %}
   </script>
